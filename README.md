@@ -3,7 +3,7 @@
 
 # MC3D – An algorithm for Structured Volume Decomposition
 
-`MC3D` is an implementation of [The 3D Motorcycle Complex for Structured Volume Decomposition \[Brückler et al. 2021\]](https://arxiv.org/abs/2112.05793) distributed under GPLv3.
+`MC3D` is an implementation of [The 3D Motorcycle Complex for Structured Volume Decomposition \[Brückler et al. 2021\]](https://arxiv.org/abs/2112.05793) (accepted to Eurographics 2022) distributed under GPLv3.
 
 If you make use of `MC3D` in your scientific work, please cite our paper. For your convenience,
 you can use the following bibtex snippet:
