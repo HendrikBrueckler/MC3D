@@ -40,6 +40,7 @@ https://user-images.githubusercontent.com/38473042/152365682-b0052ec2-df41-447a-
 
 ### Dependencies
 - GMP (NOT included, must be installed on your system)
+- [TrulySeamless3D](https://github.com/HendrikBrueckler/TrulySeamless3D) (Included as submodule, together with subdependency libHexEx)
 - OpenVolumeMesh (Included as submodule. A PATCHED version is required to fully support selfadjacent blocks! If you use CMake to build, it will automatically apply the patch in ```extern/patches/```, otherwise you have to apply the patch yourself.)
 - glog (Included as submodule)
 - googletest (Included as submodule)
@@ -52,7 +53,7 @@ In root directory
     cd build
     cmake [-DMC3D_BUILD_CLI=Off] [-DMC3D_BUILD_TESTS=Off] [-DMC3D_ENABLE_LOGGING=Off] ..
     make
-    
+
 ### Usage
 An example command-line application is included that reads a tetrahedral mesh including a seamless parametrization from a file in .hexex-format, as used and documented in [libHexEx](https://www.graphics.rwth-aachen.de/software/libHexEx/).
 It outputs a file in the same format, containing a refined version of the input mesh, followed by the number and the list of wall triangles (three vertex indices, and a double indicating the wall triangle's distance from the brush fire's origin per line) at the end of the file.

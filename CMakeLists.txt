@@ -14,6 +14,7 @@ endif()
 
 ### Cmake package finder files
 list(APPEND CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake)
+include(macrOS)
 
 ### Build type
 if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
@@ -37,9 +38,10 @@ set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/Build/lib/)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/Build/bin/)
 
 ### Options
-option(MC3D_ENABLE_LOGGING  "Enable logging for MC3D" ${MC3D_STANDALONE})
-option(MC3D_BUILD_CLI       "Build CLI app for MC3D"  ${MC3D_STANDALONE})
-option(MC3D_BUILD_TESTS     "Build tests for MC3D"    ${MC3D_STANDALONE})
+option(MC3D_ENABLE_LOGGING    "Enable logging for MC3D" ${MC3D_STANDALONE})
+option(MC3D_BUILD_CLI         "Build CLI app for MC3D"  ${MC3D_STANDALONE})
+option(MC3D_BUILD_TESTS       "Build tests for MC3D"    ${MC3D_STANDALONE})
+option(MC3D_SUBMODULES_MANUAL "Skip automatic submodule download" OFF)
 
 ### Load external libs
 add_subdirectory(extern)

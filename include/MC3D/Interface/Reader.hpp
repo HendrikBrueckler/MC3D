@@ -4,8 +4,8 @@
 #include "MC3D/Mesh/TetMeshManipulator.hpp"
 #include "MC3D/Mesh/TetMeshProps.hpp"
 
-#include <string>
 #include <fstream>
+#include <string>
 
 namespace mc3d
 {
@@ -17,12 +17,12 @@ class Reader : public TetMeshManipulator
     {
         SUCCESS = 0,
         FILE_INACCESSIBLE = 1, // Could not access file
-        MISSING_VERTICES = 2, // Less vertices than expected
-        MISSING_TETS = 3, // Less tets than expected
-        MISSING_CHART = 4, // Missing UVW coordinates per tet
-        INVALID_CHART = 5, // Parametrically inverted or degenerate tet
-        MISSING_WALLS = 6, // Less wall faces than expected
-        INVALID_WALLS = 7, // Read wallface is not part of the read mesh
+        MISSING_VERTICES = 2,  // Less vertices than expected
+        MISSING_TETS = 3,      // Less tets than expected
+        MISSING_CHART = 4,     // Missing UVW coordinates per tet
+        INVALID_CHART = 5,     // Parametrically inverted or degenerate tet
+        MISSING_WALLS = 6,     // Less wall faces than expected
+        INVALID_WALLS = 7,     // Read wallface is not part of the read mesh
     };
 
     /**
@@ -31,8 +31,9 @@ class Reader : public TetMeshManipulator
      *
      * @param meshProps OUT: this will contain the read mesh
      * @param fileName IN: file to read
+     * @param forceSanitization IN: whether sanitization of input should be forced, even for exact rational input
      */
-    Reader(TetMeshProps& meshProps, const std::string& fileName);
+    Reader(TetMeshProps& meshProps, const std::string& fileName, bool forceSanitization = false);
 
     /**
      * @brief Read only the mesh structure and parametrization from the given file.
@@ -59,6 +60,7 @@ class Reader : public TetMeshManipulator
   private:
     const std::string _fileName;
     std::ifstream _is;
+    bool _forceSanitization;
 
     /**
      * @brief Check if file is readable

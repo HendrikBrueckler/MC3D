@@ -14,17 +14,16 @@
 using namespace mc3d;
 
 #define ASSERT_SUCCESS(stage, call)                                                                                    \
-    std::invoke(                                                                                                       \
-        [&]()                                                                                                          \
+    do                                                                                                                 \
+    {                                                                                                                  \
+        LOG(INFO) << stage << "...";                                                                                   \
+        if (auto _ERROR_CODE_ = call; _ERROR_CODE_ != 0)                                                               \
         {                                                                                                              \
-            LOG(INFO) << stage << "...";                                                                               \
-            if (auto _ERROR_CODE_ = call; _ERROR_CODE_ != 0)                                                           \
-            {                                                                                                          \
-                LOG(ERROR) << stage << " failed with error code " << _ERROR_CODE_ << ", aborting...";                  \
-                return (_ERROR_CODE_);                                                                                 \
-            }                                                                                                          \
-            LOG(INFO) << stage << " was successful!";                                                                  \
-        })
+            LOG(ERROR) << stage << " failed with error code " << _ERROR_CODE_ << ", aborting...";                      \
+            return (_ERROR_CODE_);                                                                                     \
+        }                                                                                                              \
+        LOG(INFO) << stage << " was successful!";                                                                      \
+    } while (0)
 
 int main(int argc, char** argv)
 {
@@ -37,12 +36,16 @@ int main(int argc, char** argv)
     bool splitSelfadjacent = false;
     bool reduceSingularWalls = false;
     bool exactOutput = false;
+    bool forceSanitization = false;
 
     app.add_option("--input", inputFile, "Specify the input mesh & seamless parametrization file.")->required();
     app.add_flag("--input-has-walls",
                  inputHasMCwalls,
                  "Use, if the input already contains precomputed MC walls. Only use this, if you are sure the input is "
                  "numerically sane!");
+    app.add_flag("--force-sanitization",
+                 forceSanitization,
+                 "Whether input sanitization should be forced even for exact rational input");
     auto* outputOption = app.add_option("--output",
                                         outputFile,
                                         "Specify an output file to write the refined"
@@ -75,7 +78,7 @@ int main(int argc, char** argv)
     MCMesh mcMeshRaw;
     TetMeshProps meshProps(meshRaw, mcMeshRaw);
 
-    Reader reader(meshProps, inputFile);
+    Reader reader(meshProps, inputFile, forceSanitization);
     if (inputHasMCwalls)
         ASSERT_SUCCESS("Reading precomputed MC walls", reader.readSeamlessParamWithWalls());
     else
@@ -131,7 +134,8 @@ int main(int argc, char** argv)
         {
             LOG(INFO) << "Splitting selfadjacent blocks. " << n << " remaining";
 
-            ASSERT_SUCCESS("Spawning selfadjacency splitting motorcycles ", spawner.spawnSelfadjacencySplitMotorcycle());
+            ASSERT_SUCCESS("Spawning selfadjacency splitting motorcycles ",
+                           spawner.spawnSelfadjacencySplitMotorcycle());
             ASSERT_SUCCESS("Tracing selfadjacency splitting motorcycles ", tracer.traceAllMotorcycles());
 
             auto newWalls = tracer.getNewWalls();

@@ -1,10 +1,8 @@
-include(MC3DMacros)
-
 ### Better safe than sorry...
-list(APPEND MC3D_LIB_COMPILE_OPTIONS "-Wall" "-Wextra" "-Werror" "-Wshadow")
+list(APPEND ${MC3D_LIB_NAME}_COMPILE_OPTIONS "-Wall" "-Wextra" "-Werror" "-Wshadow")
 
 ### Add all source files
-list(APPEND SOURCE_LIST
+list(APPEND ${MC3D_LIB_NAME}_SOURCE_LIST
      "Algorithm/SingularityInitializer.cpp"
      "Algorithm/MCBuilder.cpp"
      "Algorithm/MCReducer.cpp"
@@ -24,37 +22,53 @@ list(APPEND SOURCE_LIST
      "Mesh/TetMeshNavigator.cpp"
      "Mesh/TetMeshProps.cpp"
      )
-add_library(${MC3D_LIB_NAME} STATIC ${SOURCE_LIST})
+add_library(${MC3D_LIB_NAME} STATIC ${${MC3D_LIB_NAME}_SOURCE_LIST})
 
 ### Find dependencies
 # gmp
 find_package(GMP REQUIRED)
 find_package(GMPXX REQUIRED)
-list(APPEND LIB_LIST ${GMP_LIBRARIES} ${GMPXX_LIBRARY})
+list(APPEND ${MC3D_LIB_NAME}_LIB_LIST ${GMP_LIBRARIES} ${GMPXX_LIBRARY})
 
 # OVM
-add_subdirectory(${PROJECT_SOURCE_DIR}/extern/OpenVolumeMesh extern/OpenVolumeMesh EXCLUDE_FROM_ALL)
-list(APPEND LIB_LIST OpenVolumeMesh::OpenVolumeMesh)
+if (NOT TARGET OpenVolumeMesh::OpenVolumeMesh)
+    add_subdirectory(${PROJECT_SOURCE_DIR}/extern/OpenVolumeMesh extern/OpenVolumeMesh EXCLUDE_FROM_ALL)
+endif()
+list(APPEND ${MC3D_LIB_NAME}_LIB_LIST OpenVolumeMesh::OpenVolumeMesh)
 
 # glog
-add_subdirectory(${PROJECT_SOURCE_DIR}/extern/glog extern/glog EXCLUDE_FROM_ALL)
-list(APPEND LIB_LIST glog::glog)
+if (NOT TARGET glog::glog)
+    add_subdirectory(${PROJECT_SOURCE_DIR}/extern/glog extern/glog EXCLUDE_FROM_ALL)
+endif()
+list(APPEND ${MC3D_LIB_NAME}_LIB_LIST glog::glog)
 if (NOT MC3D_ENABLE_LOGGING)
-    list(APPEND MC3D_LIB_COMPILE_DEFINITIONS "GOOGLE_STRIP_LOG=10")
+    list(APPEND ${MC3D_LIB_NAME}_COMPILE_DEFINITIONS "GOOGLE_STRIP_LOG=10")
 endif()
 
+# TrulySeamless3D
+if (NOT TARGET trulyseamless3d)
+    if (CMAKE_BUILD_TYPE EQUAL "DEBUG")
+        option(TRULYSEAMLESS_ENABLE_LOGGING "" ON)
+    else()
+        option(TRULYSEAMLESS_ENABLE_LOGGING "" OFF)
+    endif ()
+    add_subdirectory(${PROJECT_SOURCE_DIR}/extern/TrulySeamless3D extern/TrulySeamless3D EXCLUDE_FROM_ALL)
+endif()
+list(APPEND ${MC3D_LIB_NAME}_LIB_LIST trulyseamless3d)
+
 ### Link with dependencies
-target_link_libraries_system(${MC3D_LIB_NAME} PUBLIC ${LIB_LIST})
+target_link_libraries_system(${MC3D_LIB_NAME} PUBLIC ${${MC3D_LIB_NAME}_LIB_LIST})
 
 ### Set compile options
 set_target_properties(${MC3D_LIB_NAME} PROPERTIES CXX_STANDARD 11 CXX_STANDARD_REQUIRED ON)
-target_compile_options(${MC3D_LIB_NAME} PRIVATE ${MC3D_LIB_COMPILE_OPTIONS})
-target_compile_definitions(${MC3D_LIB_NAME} PRIVATE ${MC3D_LIB_COMPILE_DEFINITIONS})
+target_compile_options(${MC3D_LIB_NAME} PRIVATE ${${MC3D_LIB_NAME}_COMPILE_OPTIONS})
+target_compile_definitions(${MC3D_LIB_NAME} PRIVATE ${${MC3D_LIB_NAME}_COMPILE_DEFINITIONS})
 
 ### Include own headers with public access
 target_include_directories(${MC3D_LIB_NAME} PUBLIC ${PROJECT_SOURCE_DIR}/include)
 
-### Include OVM, gmp, glog headers as system headers to prevent warnings/errors from strict compile definitions
+### Include headers as system headers to prevent warnings/errors from strict compile definitions
 target_include_directories(${MC3D_LIB_NAME} SYSTEM PUBLIC ${GMPXX_INCLUDE_DIR})
 target_include_directories(${MC3D_LIB_NAME} SYSTEM PUBLIC ${PROJECT_SOURCE_DIR}/extern/OpenVolumeMesh/src)
 target_include_directories(${MC3D_LIB_NAME} SYSTEM PUBLIC ${PROJECT_SOURCE_DIR}/extern/glog/src)
+target_include_directories(${MC3D_LIB_NAME} SYSTEM PUBLIC ${PROJECT_SOURCE_DIR}/extern/TrulySeamles3D/include)

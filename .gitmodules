@@ -11,3 +11,6 @@
 [submodule "extern/CLI11"]
 	path = extern/CLI11
 	url = https://github.com/CLIUtils/CLI11.git
+[submodule "extern/TrulySeamless3D"]
+	path = extern/TrulySeamless3D
+	url = https://github.com/HendrikBrueckler/TrulySeamless3D.git

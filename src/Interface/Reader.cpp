@@ -1,12 +1,17 @@
 #include "MC3D/Interface/Reader.hpp"
 
+#define HEXEX_TESTING
+#include <TrulySeamless3D/trulyseamless.h>
+#undef HEXEX_TESTING
+
 #include <utility>
 
 namespace mc3d
 {
 
-Reader::Reader(TetMeshProps& meshProps, const std::string& fileName)
-    : TetMeshNavigator(meshProps), TetMeshManipulator(meshProps), _fileName(fileName), _is(fileName)
+Reader::Reader(TetMeshProps& meshProps, const std::string& fileName, bool forceSanitization)
+    : TetMeshNavigator(meshProps), TetMeshManipulator(meshProps), _fileName(fileName), _is(fileName),
+      _forceSanitization(forceSanitization)
 {
 }
 
@@ -108,7 +113,7 @@ Reader::RetCode Reader::readTetsAndCharts()
     }
     LOG(INFO) << "Mesh has " << NC << " tets";
 
-    bool invalidCharts = false;
+    bool exactMap = false;
     std::stringstream stringToDouble;
     for (int cell = 0; cell < NC; cell++)
     {
@@ -147,16 +152,16 @@ Reader::RetCode Reader::readTetsAndCharts()
                     return MISSING_CHART;
                 }
                 // Number is either encoded as a decimal number or mpq fraction
-                bool isDecimal = false;
+                bool isRational = false;
                 for (size_t j = 0; j < uvw[i].length(); j++)
                 {
-                    if (uvw[i].at(j) == '.' || uvw[i].at(j) == 'e')
+                    if (uvw[i].at(j) == '/')
                     {
-                        isDecimal = true;
+                        isRational = true;
                         break;
                     }
                 }
-                if (isDecimal)
+                if (!isRational)
                 {
                     double d = 0.0;
                     stringToDouble << uvw[i];
@@ -170,10 +175,53 @@ Reader::RetCode Reader::readTetsAndCharts()
                     stringToDouble.clear();
                 }
                 else
+                {
+                    exactMap = true;
                     uvwQ[i] = Q(uvw[i]);
+                }
             }
             newChart[OVM::VertexHandle{vtx[corner]}] = uvwQ;
         }
+    }
+
+    // TODO Sanitize
+    if (exactMap && !_forceSanitization)
+    {
+        LOG(INFO) << "Seamless parametrization was read in exact format, skipping sanitization";
+    }
+    else
+    {
+        if (_forceSanitization)
+            LOG(INFO) << "Sanitization explicitly requested by user, sanitizing...";
+        else
+            LOG(INFO) << "Seamless parametrization was read in floating point format, sanitizing...";
+
+        try {
+            TS3D::TrulySeamless3D sanitizer(tetMesh);
+            for (auto tet: tetMesh.cells())
+                for (auto v: tetMesh.tet_vertices(tet))
+                    sanitizer.parameter(tet, v) = Vec3Q2d(_meshProps.ref<CHART>(tet).at(v));
+            if (!sanitizer.init() || !sanitizer.sanitize(0.0, true))
+            {
+                LOG(ERROR) << "Sanitization failed";
+                return INVALID_CHART;
+            }
+            for (auto tet: tetMesh.cells())
+                for (auto v: tetMesh.tet_vertices(tet))
+                    _meshProps.ref<CHART>(tet).at(v) = sanitizer.parameter(tet, v);
+        }
+        catch (std::runtime_error& e)
+        {
+            LOG(ERROR) << "Sanitization failed: " << e.what();
+            return INVALID_CHART;
+        }
+        LOG(INFO) << "Sanitization successful";
+    }
+
+    // Check charts
+    bool invalidCharts = false;
+    for (auto tet : tetMesh.cells())
+    {
         if (volumeUVW(tet) == 0)
         {
             LOG(ERROR) << "Degenerate (UVW) tet " << tet << " in " << _fileName;
