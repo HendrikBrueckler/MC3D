@@ -29,6 +29,27 @@ void TetMeshProps::setTransition(const OVM::HalfFaceHandle& hf, const Transition
     setTransition(f, (hf.idx() % 2) == 0 ? trans : trans.invert());
 }
 
+// Convenience functions
+Transition TetMeshProps::hfTransitionOrig(const OVM::HalfFaceHandle& hf) const
+{
+    OVM::FaceHandle f(mesh.face_handle(hf));
+    if ((hf.idx() % 2) == 0)
+        return get<TRANSITION_ORIG>(f);
+    else
+        return get<TRANSITION_ORIG>(f).invert();
+}
+
+void TetMeshProps::setTransitionOrig(const OVM::FaceHandle& f, const Transition& trans)
+{
+    set<TRANSITION_ORIG>(f,trans);
+}
+
+void TetMeshProps::setTransitionOrig(const OVM::HalfFaceHandle& hf, const Transition& trans)
+{
+    auto f = mesh.face_handle(hf);
+    setTransitionOrig(f, (hf.idx() % 2) == 0 ? trans : trans.invert());
+}
+
 bool TetMeshProps::isBlockBoundary(const OVM::FaceHandle& f) const
 {
     return get<IS_WALL>(f) || mesh.is_boundary(f);

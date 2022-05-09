@@ -13,7 +13,7 @@ MCGenerator::MCGenerator(TetMeshProps& meshProps) : TetMeshNavigator(meshProps),
 {
 }
 
-MCGenerator::RetCode MCGenerator::traceMC(bool splitTori, bool splitSelfadjacency, bool simulateBC)
+MCGenerator::RetCode MCGenerator::traceMC(bool splitTori, bool splitSelfadjacency, bool simulateBC, bool keepOrigProps)
 {
     SingularityInitializer init(_meshProps);
     if (init.initTransitions() != SingularityInitializer::SUCCESS
@@ -32,6 +32,18 @@ MCGenerator::RetCode MCGenerator::traceMC(bool splitTori, bool splitSelfadjacenc
     _meshProps.allocate<IS_ORIGINAL>(false);
     for (auto f : _meshProps.mesh.faces())
         _meshProps.set<IS_ORIGINAL>(f, true);
+    if (keepOrigProps)
+    {
+        _meshProps.allocate<IS_ORIGINAL_VTX>(false);
+        for (auto v : _meshProps.mesh.vertices())
+            _meshProps.set<IS_ORIGINAL_VTX>(v, true);
+        _meshProps.allocate<CHART_ORIG>();
+        for (auto tet : _meshProps.mesh.cells())
+            _meshProps.set<CHART_ORIG>(tet, _meshProps.ref<CHART>(tet));
+        _meshProps.allocate<TRANSITION_ORIG>();
+        for (auto f : _meshProps.mesh.faces())
+            _meshProps.set<TRANSITION_ORIG>(f, _meshProps.ref<TRANSITION>(f));
+    }
 
     LOG(INFO) << "Tracing the motorcycle complex";
     LOG_IF(INFO, splitTori) << "...avoiding toroidal blocks in the process";

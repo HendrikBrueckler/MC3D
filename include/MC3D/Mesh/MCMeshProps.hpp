@@ -1,9 +1,9 @@
 #ifndef MC3D_MCMESHPROPS_HPP
 #define MC3D_MCMESHPROPS_HPP
 
-#include "MC3D/Mesh/MeshPropsInterface.hpp"
 #include "MC3D/Data/Transition.hpp"
 #include "MC3D/Data/UVWDir.hpp"
+#include "MC3D/Mesh/MeshPropsInterface.hpp"
 
 namespace mc3d
 {
@@ -22,6 +22,8 @@ MC3D_PROPERTY(PATCH_MIN_DIST,       Face,     float);
 MC3D_PROPERTY(PATCH_MESH_HALFFACES, Face,     set<OVM::HalfFaceHandle>);
 MC3D_PROPERTY(ARC_IS_SINGULAR,      Edge,     bool);
 MC3D_PROPERTY(ARC_MESH_HALFEDGES,   Edge,     list<OVM::HalfEdgeHandle>);
+MC3D_PROPERTY(ARC_INT_LENGTH,       Edge,     int);
+MC3D_PROPERTY(ARC_DBL_LENGTH,       Edge,     double);
 MC3D_PROPERTY(NODE_MESH_VERTEX,     Vertex,   OVM::VertexHandle);
 
 // Mapped
@@ -51,6 +53,8 @@ using MCMeshPropsBase = MeshPropsInterface<MCMesh,
                                            BLOCK_MESH_TETS,
                                            PATCH_MESH_HALFFACES,
                                            ARC_IS_SINGULAR,
+                                           ARC_INT_LENGTH,
+                                           ARC_DBL_LENGTH,
                                            ARC_MESH_HALFEDGES,
                                            NODE_MESH_VERTEX>;
 
@@ -107,6 +111,38 @@ class MCMeshProps : public MCMeshPropsBase
         assert(ref<Prop>(block).size() == newDir2val.size());
         this->set<Prop>(block, newDir2val);
     }
+
+    /**
+     * @brief Convenience function to retrieve ordered, directed halfedges contained in MC halfarc
+     *
+     * @param ha IN: halfarc
+     * @return list<OVM::HalfEdgeHandle> ordered halfedges of \p ha
+     */
+    list<OVM::HalfEdgeHandle> haHalfedges(const OVM::HalfEdgeHandle& ha) const;
+
+    /**
+     * @brief Convenience function to assign ordered, directed halfedges to a MC halfarc
+     *
+     * @param ha IN: halfarc
+     * @param hes IN: halfedges
+     */
+    void setHaHalfedges(const OVM::HalfEdgeHandle& ha, const list<OVM::HalfEdgeHandle>& hes);
+
+    /**
+     * @brief Convenience function to retrieve directed halffaces contained in MC halfpatch
+     *
+     * @param hp IN: halfpatch
+     * @return std::set<OVM::HalfFaceHandle> directed halffaces of \p hp
+     */
+    std::set<OVM::HalfFaceHandle> hpHalffaces(const OVM::HalfFaceHandle& hp) const;
+
+    /**
+     * @brief Convenience function to assign directed halffaces to a MC halfarc
+     *
+     * @param hp IN: halfpatch
+     * @param hfs IN: halffaces
+     */
+    void setHpHalffaces(const OVM::HalfFaceHandle& hp, const std::set<OVM::HalfFaceHandle>& hfs);
 };
 
 } // namespace mc3d

@@ -224,8 +224,8 @@ class MCMeshNavigator : public virtual TetMeshNavigator
      * @return map<OVM::CellHandle> transitions of blocks incident on n of \p nc (chained onto \p transRef )
      */
     map<OVM::CellHandle, Transition> determineTransitionsAroundNode(const OVM::VertexHandle& n,
-                                                                            const OVM::CellHandle& bRef,
-                                                                            const Transition& transRef) const;
+                                                                    const OVM::CellHandle& bRef,
+                                                                    const Transition& transRef) const;
 
     /**
      * @brief Get the patch shared by \p as if exists
@@ -256,7 +256,95 @@ class MCMeshNavigator : public virtual TetMeshNavigator
     bool
     patchFrontsAreAligned(const OVM::FaceHandle& p1, const OVM::FaceHandle& p2, const OVM::EdgeHandle& aShared) const;
 
+    /**
+     * @brief Retrieve the normal direction of \p hp in the coordinate system of its incident block
+     *        which must be internally transition-free
+     *
+     * @param hp IN: halfpatch
+     * @return UVWDir normal direction of \p hp in the coordinate system of its incident block
+     */
+    UVWDir halfpatchNormalDir(const OVM::HalfFaceHandle& hp) const;
+
+    /**
+     * @brief Retrieve the UVW of the vertex of \p n in the coordinate system of \p b
+     *        which must be internally transition-free
+     *
+     * @param n node
+     * @param b block containing \p n
+     * @return Vec3Q UVW of the vertex of \p n in the coordinate system of \p b
+     */
+    Vec3Q nodeUVWinBlock(const OVM::VertexHandle& n, const OVM::CellHandle& b) const;
+
+    /**
+     * @brief Struct to store info about non-branched sequences of singular arcs
+     */
+    struct SingularLink
+    {
+        int id;
+        bool cyclic;
+        OVM::VertexHandle nFrom;
+        OVM::VertexHandle nTo;
+        vector<OVM::HalfEdgeHandle> pathHas;
+        int length;
+    };
+
+    /**
+     * @brief Struct to store info about collections of equiplanar surface patches
+     */
+    struct BoundaryRegion
+    {
+        bool annular;
+        set<OVM::VertexHandle> patchNs;
+        set<OVM::HalfFaceHandle> patchHps;
+        vector<OVM::HalfEdgeHandle> boundaryHas;
+    };
+
+    /**
+     * @brief Gather all singular links in the MC.
+     *
+     * @param singularLinks OUT: collection of all singular links
+     * @param aSing2singularLinkIdx OUT: mapping of each singular arc to its containing singular link idx
+     * @param n2singularLinksOut OUT: mapping of each singular node to its outgoing singular links idx (paths are
+     * directed!)
+     * @param n2singularLinksIn OUT: mapping of each singular node to its incoming singular links idx (paths are
+     * directed!)
+     */
+    void getSingularLinks(vector<SingularLink>& singularLinks,
+                          map<OVM::EdgeHandle, int>& aSing2singularLinkIdx,
+                          map<OVM::VertexHandle, vector<int>>& n2singularLinksOut,
+                          map<OVM::VertexHandle, vector<int>>& n2singularLinksIn) const;
+
+    /**
+     * @brief Gather all boundary regions in the MC.
+     *
+     * @param boundaryRegions OUT: collection of all boundary regions
+     * @param hpBoundary2boundaryRegionIdx OUT: mapping of each surface halfpatch to its containing surface
+     * @param n2singularLinksOut OUT: mapping of each singular node to its outgoing singular links idx (paths are
+     * directed!)
+     * @param n2singularLinksIn OUT: mapping of each singular node to its incoming singular links idx (paths are
+     * directed!)
+     */
+    void getBoundaryRegions(vector<BoundaryRegion>& boundaryRegions,
+                             map<OVM::HalfFaceHandle, int>& hpBoundary2boundaryRegionIdx) const;
+
   protected:
+    /**
+     * @brief Trace a singular link to both its endpoints
+     *
+     * @param haStart IN: first halfarc to expand from
+     * @param nsStop IN/OUT: endpoint vertices (dont expand further). Circular Paths will add new nsStop
+     * @param singularLinks IN/OUT: new path is added here
+     * @param aSing2singularLinkIdx IN/OUT: mappings are updated for the new path
+     * @param n2singularLinksOut IN/OUT: mappings are updated for the new path
+     * @param n2singularLinksIn IN/OUT: mappings are updated for the new path
+     */
+    void traceSingularLink(const OVM::HalfEdgeHandle& haStart,
+                              set<OVM::VertexHandle>& nsStop,
+                              vector<SingularLink>& singularLinks,
+                              map<OVM::EdgeHandle, int>& aSing2singularLinkIdx,
+                              map<OVM::VertexHandle, vector<int>>& n2singularLinksOut,
+                              map<OVM::VertexHandle, vector<int>>& n2singularLinksIn) const;
+
     const MCMeshProps& _mcMeshPropsC;
 };
 

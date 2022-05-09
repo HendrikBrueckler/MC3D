@@ -202,22 +202,15 @@ void MCMeshNavigator::joinPatchFacesAtArc(const OVM::FaceHandle& p1,
                                           const OVM::EdgeHandle& a,
                                           set<OVM::HalfFaceHandle>& pHfs) const
 {
+    const MCMesh& mcMesh = _mcMeshPropsC.mesh;
     pHfs.clear();
 
-    const TetMesh& tetMesh = _meshPropsC.mesh;
-
+    bool flipHp2 = !patchFrontsAreAligned(p1, p2, a);
     const auto& p1hfs = _mcMeshPropsC.ref<PATCH_MESH_HALFFACES>(p1);
-    const auto& p2hfs = _mcMeshPropsC.ref<PATCH_MESH_HALFFACES>(p2);
-
-    bool inverseP2 = patchFrontsAreAligned(p1, p2, a);
-
+    const auto& p2hfs
+        = _mcMeshPropsC.hpHalffaces(flipHp2 ? mcMesh.halfface_handle(p2, 1) : mcMesh.halfface_handle(p2, 0));
     pHfs = p1hfs;
-
-    if (!inverseP2)
-        pHfs.insert(p2hfs.begin(), p2hfs.end());
-    else
-        for (auto hf : p2hfs)
-            pHfs.insert(tetMesh.opposite_halfface_handle(hf));
+    pHfs.insert(p2hfs.begin(), p2hfs.end());
     assert(!pHfs.empty());
 }
 
@@ -1050,6 +1043,219 @@ bool MCMeshNavigator::patchFrontsAreAligned(const OVM::FaceHandle& p1,
     }
 #endif
     return p1containsHa != p2containsHa;
+}
+
+UVWDir MCMeshNavigator::halfpatchNormalDir(const OVM::HalfFaceHandle& hp) const
+{
+    bool flip = false;
+    auto b = _mcMeshPropsC.mesh.incident_cell(hp);
+    if (!b.is_valid())
+    {
+        flip = true;
+        b = _mcMeshPropsC.mesh.incident_cell(_mcMeshPropsC.mesh.opposite_halfface_handle(hp));
+        assert(b.is_valid());
+    }
+
+    for (const auto& kv : _mcMeshPropsC.ref<BLOCK_FACE_PATCHES>(b))
+        if (kv.second.find(_mcMeshPropsC.mesh.face_handle(hp)) != kv.second.end())
+            return toDir((flip ? 1 : -1) * toVec(kv.first));
+
+    assert(false);
+    return UVWDir::NONE;
+}
+
+Vec3Q MCMeshNavigator::nodeUVWinBlock(const OVM::VertexHandle& n, const OVM::CellHandle& b) const
+{
+    auto v = _mcMeshPropsC.get<NODE_MESH_VERTEX>(n);
+    auto tet = anyIncidentTetOfBlock(v, b);
+
+    return _meshPropsC.ref<CHART>(tet).at(v);
+}
+
+void MCMeshNavigator::getBoundaryRegions(vector<BoundaryRegion>& boundaryRegions,
+                                         map<OVM::HalfFaceHandle, int>& hpBoundary2boundaryRegionIdx) const
+{
+    const MCMesh& mcMesh = _mcMeshPropsC.mesh;
+
+    boundaryRegions.clear();
+    hpBoundary2boundaryRegionIdx.clear();
+
+    vector<bool> hpVisited(mcMesh.n_halffaces(), false);
+
+    for (auto hp : mcMesh.halffaces())
+    {
+        if (!hpVisited[hp.idx()] && mcMesh.is_boundary(hp))
+        {
+            auto idx = boundaryRegions.size();
+            boundaryRegions.emplace_back();
+            auto& boundaryRegion = boundaryRegions.back();
+            list<OVM::HalfFaceHandle> hpQ({hp});
+            hpVisited[hp.idx()] = true;
+            hpBoundary2boundaryRegionIdx[hp] = idx;
+            boundaryRegion.patchHps.insert(hp);
+            while (!hpQ.empty())
+            {
+                auto hpCurrent = hpQ.front();
+                hpQ.pop_front();
+
+                for (auto nCurrent : mcMesh.halfface_vertices(hpCurrent))
+                    boundaryRegion.patchNs.insert(nCurrent);
+
+                for (auto a : mcMesh.halfface_edges(hpCurrent))
+                    if (!_mcMeshPropsC.get<ARC_IS_SINGULAR>(a))
+                        for (auto hpNext : mcMesh.edge_halffaces(a))
+                            if (!hpVisited[hpNext.idx()] && mcMesh.is_boundary(hpNext))
+                            {
+                                hpVisited[hpNext.idx()] = true;
+                                boundaryRegion.patchHps.insert(hpNext);
+                                hpQ.emplace_back(hpNext);
+                                hpBoundary2boundaryRegionIdx[hpNext] = idx;
+                                break;
+                            }
+            }
+            // Determine boundary
+            set<OVM::HalfEdgeHandle> boundary;
+            for (auto hpSurface : boundaryRegion.patchHps)
+                for (auto ha : mcMesh.halfface_halfedges(hpSurface))
+                {
+                    auto it = boundary.find(mcMesh.opposite_halfedge_handle(ha));
+                    if (it != boundary.end())
+                        boundary.erase(it);
+                    else
+                        boundary.insert(ha);
+                }
+            // Order boundary
+            {
+                boundaryRegion.annular = false;
+                while (!boundary.empty())
+                {
+                    OVM::HalfEdgeHandle haCurr(*boundary.begin());
+                    boundary.erase(boundary.begin());
+                    bool foundNext = false;
+                    do
+                    {
+                        foundNext = false;
+                        boundaryRegion.boundaryHas.emplace_back(haCurr);
+                        for (auto haOut : mcMesh.outgoing_halfedges(mcMesh.to_vertex_handle(haCurr)))
+                        {
+                            auto it = boundary.find(haOut);
+                            if (it != boundary.end())
+                            {
+                                haCurr = haOut;
+                                boundary.erase(it);
+                                foundNext = true;
+                                break;
+                            }
+                        }
+                    } while (foundNext);
+                    if (!boundary.empty())
+                        boundaryRegion.annular = true;
+                }
+            }
+        }
+    }
+}
+
+void MCMeshNavigator::getSingularLinks(vector<SingularLink>& singularLinks,
+                                       map<OVM::EdgeHandle, int>& aSing2singularLinkIdx,
+                                       map<OVM::VertexHandle, vector<int>>& n2singularLinksOut,
+                                       map<OVM::VertexHandle, vector<int>>& n2singularLinksIn) const
+{
+    const MCMesh& mcMesh = _mcMeshPropsC.mesh;
+
+    singularLinks.clear();
+    aSing2singularLinkIdx.clear();
+    n2singularLinksOut.clear();
+    n2singularLinksIn.clear();
+
+    vector<OVM::EdgeHandle> singularArcs;
+    for (auto a : mcMesh.edges())
+        if (_mcMeshPropsC.get<ARC_IS_SINGULAR>(a))
+            singularArcs.emplace_back(a);
+
+    set<OVM::VertexHandle> nsStart;
+    for (auto n : mcMesh.vertices())
+    {
+        int nSingularEdges = 0;
+        for (auto a : mcMesh.vertex_edges(n))
+            if (_mcMeshPropsC.get<ARC_IS_SINGULAR>(a))
+                nSingularEdges++;
+        if (nSingularEdges != 2 && nSingularEdges != 0)
+            nsStart.insert(n);
+    }
+
+    for (auto nStart : nsStart)
+        for (auto ha : mcMesh.outgoing_halfedges(nStart))
+        {
+            auto a = mcMesh.edge_handle(ha);
+            if (_mcMeshPropsC.get<ARC_IS_SINGULAR>(a) && aSing2singularLinkIdx.find(a) == aSing2singularLinkIdx.end())
+            {
+                traceSingularLink(
+                    ha, nsStart, singularLinks, aSing2singularLinkIdx, n2singularLinksOut, n2singularLinksIn);
+            }
+        }
+
+    for (auto aSing : singularArcs)
+        if (aSing2singularLinkIdx.find(aSing) == aSing2singularLinkIdx.end())
+        {
+            traceSingularLink(mcMesh.halfedge_handle(aSing, 0),
+                              nsStart,
+                              singularLinks,
+                              aSing2singularLinkIdx,
+                              n2singularLinksOut,
+                              n2singularLinksIn);
+        }
+}
+
+void MCMeshNavigator::traceSingularLink(const OVM::HalfEdgeHandle& haStart,
+                                        set<OVM::VertexHandle>& nsStop,
+                                        vector<SingularLink>& singularLinks,
+                                        map<OVM::EdgeHandle, int>& aSing2singularLinkIdx,
+                                        map<OVM::VertexHandle, vector<int>>& n2singularLinksOut,
+                                        map<OVM::VertexHandle, vector<int>>& n2singularLinksIn) const
+{
+    const MCMesh& mcMesh = _mcMeshPropsC.mesh;
+
+    auto idx = singularLinks.size();
+    singularLinks.emplace_back();
+    auto& singPath = singularLinks.back();
+    singPath.id = singularLinks.size() - 1;
+    auto nStart = mcMesh.from_vertex_handle(haStart);
+    singPath.cyclic = nsStop.find(nStart) == nsStop.end();
+    if (singPath.cyclic)
+        nsStop.insert(nStart);
+
+    // Gather Halfedges
+    auto haCurr = haStart;
+    auto aCurr = mcMesh.edge_handle(haCurr);
+    auto nCurr = mcMesh.to_vertex_handle(haCurr);
+    while (nsStop.find(nCurr) == nsStop.end())
+    {
+        singPath.pathHas.emplace_back(haCurr);
+        for (auto haNext : mcMesh.outgoing_halfedges(mcMesh.to_vertex_handle(haCurr)))
+            if (mcMesh.opposite_halfedge_handle(haNext) != haCurr
+                && _mcMeshPropsC.get<ARC_IS_SINGULAR>(mcMesh.edge_handle(haNext)))
+            {
+                haCurr = haNext;
+                aCurr = mcMesh.edge_handle(haCurr);
+                nCurr = mcMesh.to_vertex_handle(haCurr);
+                break;
+            }
+    }
+    singPath.pathHas.emplace_back(haCurr);
+
+    // Gather meta info
+    singPath.nFrom = nStart;
+    singPath.nTo = mcMesh.to_vertex_handle(singPath.pathHas.back());
+    n2singularLinksOut[singPath.nFrom].emplace_back(idx);
+    n2singularLinksIn[singPath.nTo].emplace_back(idx);
+    singPath.length = 0;
+    for (auto ha : singPath.pathHas)
+    {
+        aSing2singularLinkIdx[mcMesh.edge_handle(ha)] = idx;
+        if (_mcMeshPropsC.isAllocated<ARC_INT_LENGTH>())
+            singPath.length += _mcMeshPropsC.get<ARC_INT_LENGTH>(mcMesh.edge_handle(ha));
+    }
 }
 
 } // namespace mc3d

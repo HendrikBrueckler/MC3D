@@ -19,7 +19,7 @@ const vector<std::string> minimalModelNamesOut{"minimal_out"};
 
 FullToolChainTest::FullToolChainTest()
     : meshRaw(), mcMeshRaw(), meshProps(meshRaw, mcMeshRaw), reader(meshProps, inputFile()),
-      mcgen(meshProps), writer(meshProps, outputFile()), reducer(meshProps)
+      mcgen(meshProps), writer(meshProps, outputFile(), true), reducer(meshProps)
 {
 }
 
@@ -32,8 +32,11 @@ OVM::EdgeHandle FullToolChainTest::anySingularEdge()
             // Check if full cycle transitions around edge are identity
             Transition cyclicTransition;
             OVM::HalfFaceHandle hfStart = *meshRaw.hehf_iter(he);
-            mcgen.forEachHfInHeCycle(
-                he, hfStart, hfStart, [&cyclicTransition, &meshProps = meshProps](OVM::HalfFaceHandle hf) {
+            mcgen.forEachHfInHeCycle(he,
+                                     hfStart,
+                                     hfStart,
+                                     [&cyclicTransition, &meshProps = meshProps](OVM::HalfFaceHandle hf)
+                                     {
                     cyclicTransition = cyclicTransition.chain(meshProps.hfTransition(hf));
                     return false; // dont break afterwards
                 });
@@ -123,8 +126,11 @@ void FullToolChainTest::assertValidSingularities()
             for (auto hf : meshRaw.halfedge_halffaces(he))
             {
                 Transition cyclicTransition;
-                mcgen.forEachHfInHeCycle(
-                    he, hf, hf, [&cyclicTransition, &meshProps = meshProps](OVM::HalfFaceHandle hf) {
+                mcgen.forEachHfInHeCycle(he,
+                                         hf,
+                                         hf,
+                                         [&cyclicTransition, &meshProps = meshProps](OVM::HalfFaceHandle hf)
+                                         {
                         cyclicTransition = cyclicTransition.chain(meshProps.hfTransition(hf));
                         return false;
                     });
@@ -378,7 +384,8 @@ void FullToolChainTest::assertValidMC()
                     if (!tet.is_valid())
                         continue;
                     auto block = meshProps.get<MC_BLOCK>(tet);
-                    if (block == MCBuilder::UNASSIGNED_TOROIDAL_BLOCK_U || block == MCBuilder::UNASSIGNED_TOROIDAL_BLOCK_V
+                    if (block == MCBuilder::UNASSIGNED_TOROIDAL_BLOCK_U
+                        || block == MCBuilder::UNASSIGNED_TOROIDAL_BLOCK_V
                         || block == MCBuilder::UNASSIGNED_TOROIDAL_BLOCK_W)
                         toroidalBlockAdj = true;
                 }
@@ -404,7 +411,8 @@ void FullToolChainTest::assertValidMC()
                 for (auto tet : meshRaw.edge_cells(e))
                 {
                     auto block = meshProps.get<MC_BLOCK>(tet);
-                    if (block == MCBuilder::UNASSIGNED_TOROIDAL_BLOCK_U || block == MCBuilder::UNASSIGNED_TOROIDAL_BLOCK_V
+                    if (block == MCBuilder::UNASSIGNED_TOROIDAL_BLOCK_U
+                        || block == MCBuilder::UNASSIGNED_TOROIDAL_BLOCK_V
                         || block == MCBuilder::UNASSIGNED_TOROIDAL_BLOCK_W)
                         toroidalBlockAdj = true;
                 }
@@ -515,6 +523,23 @@ void FullToolChainTest::assertValidMC()
             ASSERT_EQ(meshRaw.to_vertex_handle(*it), meshRaw.from_vertex_handle(*it2));
         }
     }
+
+    for (auto b: mcMeshRaw.cells())
+    {
+        set<OVM::EdgeHandle> bAs;
+        set<OVM::EdgeHandle> bAllAs;
+        for (auto& dirs2as: mcMeshProps.ref<BLOCK_ALL_ARCS>(b))
+            for (auto a: dirs2as.second)
+            {
+                ASSERT_TRUE(bAllAs.find(a) == bAllAs.end());
+                bAllAs.insert(a);
+            }
+
+        for (auto a: mcMeshRaw.cell_edges(b))
+            bAs.insert(a);
+
+        ASSERT_EQ(bAs, bAllAs);
+    }
 }
 
 void FullToolChainTest::assertPatchesReducible(bool reducible, bool preserveSingularWalls, bool avoidSelfadjacency)
@@ -544,6 +569,47 @@ void FullToolChainTest::assertArcsReducible(bool reducible)
     ASSERT_EQ(isReducible, reducible);
 }
 
+void FullToolChainTest::assertValidIntegerArcLengths()
+{
+    auto& mcMeshProps = *meshProps.get<MC_MESH_PROPS>();
+    for (auto patch : mcMeshRaw.faces())
+    {
+        auto halfpatch = mcMeshRaw.halfface_handle(patch, 0);
+        if (mcMeshRaw.is_boundary(halfpatch))
+            halfpatch = mcMeshRaw.opposite_halfface_handle(halfpatch);
+
+        auto dir2halfarcs = reducer.halfpatchHalfarcsByDir(halfpatch);
+
+        ASSERT_LE(dir2halfarcs.size(), 4);
+        map<UVWDir, bool> checked;
+        for (const auto& kv : dir2halfarcs)
+        {
+            auto dir = kv.first;
+            auto halfarcs = kv.second;
+            ASSERT_TRUE(!halfarcs.empty());
+            if (checked[dir])
+                continue;
+
+            // TODO does not work with negative lengths
+            int length = 0;
+            for (auto halfarc : halfarcs)
+                length += mcMeshProps.get<ARC_INT_LENGTH>(mcMeshRaw.edge_handle(halfarc));
+            checked[dir] = true;
+            // ASSERT_GE(length, 0);
+
+            if (length != 0 || dir2halfarcs.find(-dir) != dir2halfarcs.end())
+            {
+                ASSERT_NE(dir2halfarcs.find(-dir), dir2halfarcs.end());
+                int lengthOpp = 0;
+                for (auto halfarc : dir2halfarcs.at(-dir))
+                    lengthOpp += mcMeshProps.get<ARC_INT_LENGTH>(mcMeshRaw.edge_handle(halfarc));
+                checked[dir] = true;
+                ASSERT_EQ(length, lengthOpp);
+            }
+
+        }
+    }
+}
 std::string FullToolChainTest::resourcePath()
 {
     return TEST_RESOURCES_PATH;
@@ -562,9 +628,7 @@ std::string FullToolChainTest::inputFile()
 std::string FullToolChainTest::outputFile()
 {
     return resourcePath() + GetParam() + "_out" + fileExt();
-    ;
 }
-
 bool FullToolChainTest::isQuantized()
 {
     return std::find(quantizedModelNames.begin(), quantizedModelNames.end(), GetParam()) != quantizedModelNames.end()

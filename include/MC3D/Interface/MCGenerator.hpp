@@ -37,13 +37,15 @@ class MCGenerator : public TetMeshManipulator
      *                       MC_MESH_PROPS, MC_BLOCK, MC_PATCH, MC_ARC, MC_NODE
      * Allocates all MCMesh properties.
      *
+     * If keepOrigProps is true, allocates CHART_ORIG, TRANSITION_ORIG, IS_ORIGINAL_VTX
+     *
      * @param splitTori IN: whether to split toroidal blocks
      * @param splitSelfadjacency IN: whether to split self-adjacent blocks
      * @param simulateBC IN: whether the BC (base complex) should be traced instead of the MC. WARNING: BC may take much
      *                       longer and consume much more memory!
      * @return RetCode SUCCESS or errorcode
      */
-    RetCode traceMC(bool splitTori, bool splitSelfadjacency, bool simulateBC = false);
+    RetCode traceMC(bool splitTori, bool splitSelfadjacency, bool simulateBC = false, bool keepOrigProps = false);
 
     /**
      * @brief Reduce the motorcycle complex for the given mesh.

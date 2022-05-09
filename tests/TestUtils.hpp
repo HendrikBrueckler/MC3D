@@ -51,6 +51,8 @@ class FullToolChainTest : public ::testing::TestWithParam<std::string>
 
     void assertArcsReducible(bool reducible);
 
+    void assertValidIntegerArcLengths();
+
     std::string resourcePath();
 
     std::string fileExt();

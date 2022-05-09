@@ -44,7 +44,7 @@ struct NodeCoordination
     map<OVM::CellHandle, Transition> b2trans;
 
     NodeType nodeType;
-    
+
     virtual ~NodeCoordination() = default;
 };
 
@@ -76,7 +76,7 @@ struct NonSingNodeCoordination : public NodeCoordination
     bool haPrincipalBoundary;
 
     /**
-     * @brief Whether this node is on a singular path (non-branch).
+     * @brief Whether this node is on a singular link (non-branch).
      */
     bool semiSingular;
 

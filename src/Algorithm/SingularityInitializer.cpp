@@ -12,12 +12,14 @@ SingularityInitializer::RetCode SingularityInitializer::initTransitions()
 {
     int n = 0;
     _meshProps.allocate<TRANSITION>();
+    _meshProps.allocate<TRANSITION_ORIG>();
     for (auto f : _meshProps.mesh.faces())
     {
         auto trans = calcTransition(f);
         if (!trans.isIdentity())
         {
             _meshProps.setTransition(f, calcTransition(f));
+            _meshProps.setTransitionOrig(f, trans);
             n++;
         }
     }

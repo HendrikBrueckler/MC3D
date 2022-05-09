@@ -176,6 +176,11 @@ class MeshPropsInterface
     {
     }
 
+    ~MeshPropsInterface()
+    {
+        clearRecurse<0>();
+    }
+
     /**
      * @brief Whether this property manager class manages a property of type \p Prop
      *

@@ -19,9 +19,30 @@ TetMeshManipulator::splitHalfEdge(const OVM::HalfEdgeHandle& heAD, const OVM::Ce
     storeParentChildReconstructors(heAD, he2parentHf, vXOppositeOfAD2parentFace, heOppositeOfAD2parentTet);
 
     // Calculate uvw of new vtx for each tet incident to heAD
+    bool hasLocalChart = _meshProps.isAllocated<CHART>()
+                         && _meshProps.ref<CHART>(tetStart).find(tetMesh.from_vertex_handle(heAD))
+                                != _meshProps.ref<CHART>(tetStart).end()
+                         && _meshProps.ref<CHART>(tetStart).find(tetMesh.to_vertex_handle(heAD))
+                                != _meshProps.ref<CHART>(tetStart).end();
+    bool hasLocalChartOrig = _meshProps.isAllocated<CHART_ORIG>()
+                             && _meshProps.ref<CHART_ORIG>(tetStart).find(tetMesh.from_vertex_handle(heAD))
+                                    != _meshProps.ref<CHART_ORIG>(tetStart).end()
+                             && _meshProps.ref<CHART_ORIG>(tetStart).find(tetMesh.to_vertex_handle(heAD))
+                                    != _meshProps.ref<CHART_ORIG>(tetStart).end();
+    bool hasLocalChartIGM = _meshProps.isAllocated<CHART_IGM>()
+                            && _meshProps.ref<CHART_IGM>(tetStart).find(tetMesh.from_vertex_handle(heAD))
+                                   != _meshProps.ref<CHART_IGM>(tetStart).end()
+                            && _meshProps.ref<CHART_IGM>(tetStart).find(tetMesh.to_vertex_handle(heAD))
+                                   != _meshProps.ref<CHART_IGM>(tetStart).end();
     map<OVM::CellHandle, Vec3Q> tet2uvwnew;
-    if (_meshProps.isAllocated<CHART>())
-        tet2uvwnew = calculateNewVtxUVW(heAD, tetStart, t);
+    if (hasLocalChart)
+        tet2uvwnew = calculateNewVtxChart<CHART>(heAD, tetStart, t);
+    map<OVM::CellHandle, Vec3Q> tet2uvworignew;
+    if (hasLocalChartOrig)
+        tet2uvworignew = calculateNewVtxChart<CHART_ORIG>(heAD, tetStart, t);
+    map<OVM::CellHandle, Vec3Q> tet2igmnew;
+    if (hasLocalChartIGM)
+        tet2igmnew = calculateNewVtxChart<CHART_IGM>(heAD, tetStart, t);
 
     // PERFORM THE EDGE SPLIT and reconstruct parent/child relations
     map<OVM::HalfEdgeHandle, vector<OVM::HalfEdgeHandle>> he2heChildren;
@@ -44,78 +65,88 @@ TetMeshManipulator::splitHalfEdge(const OVM::HalfEdgeHandle& heAD, const OVM::Ce
     cloneParentsToChildren(he2heChildren, e2eChildren, hf2hfChildren, f2fChildren, tet2tetChildren);
 
     // Special handling of CHARTS
-    if (_meshProps.isAllocated<CHART>())
-    {
-        for (const auto& kv : tet2tetChildren)
-        {
-            auto& tetParent = kv.first;
-            auto& tetChildren = kv.second;
-            for (auto tetChild : tetChildren)
-            {
-                auto vs = tetMesh.get_cell_vertices(tetChild);
-                auto& chart = _meshProps.ref<CHART>(tetChild);
-                for (auto& v2uvw : chart)
-                    if (std::find(vs.begin(), vs.end(), v2uvw.first) == vs.end())
-                    {
-                        chart.erase(v2uvw.first);
-                        break;
-                    }
-                chart[vN] = tet2uvwnew[tetParent];
-                assert(chart.size() == 4);
-            }
-        }
-    }
+    if (hasLocalChart)
+        inheritCharts<CHART>(tet2uvwnew, tet2tetChildren, vN);
+    if (hasLocalChartOrig)
+        inheritCharts<CHART_ORIG>(tet2uvworignew, tet2tetChildren, vN);
+    if (hasLocalChartIGM)
+        inheritCharts<CHART_IGM>(tet2igmnew, tet2tetChildren, vN);
+
     // Special handling of TRANSITIONS
-    if (_meshProps.isAllocated<TRANSITION>())
-        for (const auto& kv : hf2hfChildren)
-        {
-            auto& hfParent = kv.first;
-            auto& hfChildren = kv.second;
-            for (auto hfChild : hfChildren)
-                _meshProps.setTransition(hfChild, _meshProps.hfTransition(hfParent));
-        }
-
-    // Map child properties
-    if (_meshProps.isAllocated<CHILD_EDGES>())
-        for (const auto& kv : e2eChildren)
-        {
-            auto& eParent = kv.first;
-            auto& eChildren = kv.second;
-            _meshProps.set<CHILD_EDGES>(eParent, eChildren);
-        }
-
-    if (_meshProps.isAllocated<CHILD_CELLS>())
-        for (const auto& kv : tet2tetChildren)
-        {
-            auto& tetParent = kv.first;
-            auto& tetChildren = kv.second;
-            _meshProps.set<CHILD_CELLS>(tetParent, tetChildren);
-        }
-
-    if (_meshProps.isAllocated<CHILD_FACES>())
-        for (const auto& kv : f2fChildren)
-        {
-            auto& fParent = kv.first;
-            auto& fChildren = kv.second;
-            _meshProps.set<CHILD_FACES>(fParent, fChildren);
-        }
-    if (_meshProps.isAllocated<CHILD_HALFEDGES>())
-        for (const auto& kv : he2heChildren)
-        {
-            auto& heParent = kv.first;
-            auto& heChildren = kv.second;
-            _meshProps.set<CHILD_HALFEDGES>(heParent, heChildren);
-        }
-    if (_meshProps.isAllocated<CHILD_HALFFACES>())
-        for (const auto& kv : hf2hfChildren)
-        {
-            auto& hfParent = kv.first;
-            auto& hfChildren = kv.second;
-            _meshProps.set<CHILD_HALFFACES>(hfParent, hfChildren);
-        }
+    inheritTransitions(hf2hfChildren);
 
     // Update MC mapping
     updateMCMapping(he2heChildren, e2eChildren, hf2hfChildren, f2fChildren, tet2tetChildren);
+
+    return vN;
+}
+
+OVM::VertexHandle TetMeshManipulator::splitFace(const OVM::FaceHandle& f, const Vec3Q& barCoords)
+{
+    TetMesh& tetMesh = _meshProps.mesh;
+
+    auto hf = tetMesh.halfface_handle(f, 0);
+    auto vsHf = tetMesh.get_halfface_vertices(hf);
+    auto tetStart = tetMesh.incident_cell(hf);
+    bool flip = !tetStart.is_valid();
+    if (flip)
+    {
+        hf = tetMesh.opposite_halfface_handle(hf);
+        tetStart = tetMesh.incident_cell(hf);
+        assert(tetStart.is_valid());
+    }
+
+    // store some relations to reconstruct child<->parent
+    map<OVM::HalfEdgeHandle, std::pair<OVM::HalfFaceHandle, OVM::CellHandle>> he2parentHfAndTet;
+    storeParentChildReconstructors(f, he2parentHfAndTet);
+
+    // Calculate uvw of new vtx for each tet incident to heAD
+    bool hasLocalChart = _meshProps.isAllocated<CHART>()
+                         && _meshProps.ref<CHART>(tetStart).find(vsHf[0]) != _meshProps.ref<CHART>(tetStart).end()
+                         && _meshProps.ref<CHART>(tetStart).find(vsHf[1]) != _meshProps.ref<CHART>(tetStart).end()
+                         && _meshProps.ref<CHART>(tetStart).find(vsHf[2]) != _meshProps.ref<CHART>(tetStart).end();
+    bool hasLocalChartOrig = _meshProps.isAllocated<CHART_ORIG>()
+                             && _meshProps.ref<CHART_ORIG>(tetStart).find(vsHf[0]) != _meshProps.ref<CHART_ORIG>(tetStart).end()
+                             && _meshProps.ref<CHART_ORIG>(tetStart).find(vsHf[1]) != _meshProps.ref<CHART_ORIG>(tetStart).end()
+                             && _meshProps.ref<CHART_ORIG>(tetStart).find(vsHf[2]) != _meshProps.ref<CHART_ORIG>(tetStart).end();
+    bool hasLocalChartIGM
+        = _meshProps.isAllocated<CHART_IGM>()
+          && _meshProps.ref<CHART_IGM>(tetStart).find(vsHf[0]) != _meshProps.ref<CHART_IGM>(tetStart).end()
+          && _meshProps.ref<CHART_IGM>(tetStart).find(vsHf[1]) != _meshProps.ref<CHART_IGM>(tetStart).end()
+          && _meshProps.ref<CHART_IGM>(tetStart).find(vsHf[2]) != _meshProps.ref<CHART_IGM>(tetStart).end();
+    map<OVM::CellHandle, Vec3Q> tet2uvwnew;
+    if (hasLocalChart)
+        tet2uvwnew = calculateNewVtxChart<CHART>(tetStart, hf, barCoords);
+    map<OVM::CellHandle, Vec3Q> tet2uvworignew;
+    if (hasLocalChartOrig)
+        tet2uvworignew = calculateNewVtxChart<CHART_ORIG>(tetStart, hf, barCoords);
+    map<OVM::CellHandle, Vec3Q> tet2igmnew;
+    if (hasLocalChartIGM)
+        tet2igmnew = calculateNewVtxChart<CHART_IGM>(tetStart, hf, barCoords);
+
+    // PERFORM THE EDGE SPLIT and reconstruct parent/child relations
+    map<OVM::HalfFaceHandle, vector<OVM::HalfFaceHandle>> hf2hfChildren;
+    map<OVM::FaceHandle, vector<OVM::FaceHandle>> f2fChildren;
+    map<OVM::CellHandle, vector<OVM::CellHandle>> tet2tetChildren;
+    OVM::VertexHandle vN = splitAndReconstructParentChildRelations(
+        f, barCoords, he2parentHfAndTet, hf2hfChildren, f2fChildren, tet2tetChildren);
+
+    // Clone all properties to children
+    cloneParentsToChildren({}, {}, hf2hfChildren, f2fChildren, tet2tetChildren);
+
+    // Special handling of CHARTS
+    if (hasLocalChart)
+        inheritCharts<CHART>(tet2uvwnew, tet2tetChildren, vN);
+    if (hasLocalChartOrig)
+        inheritCharts<CHART_ORIG>(tet2uvworignew, tet2tetChildren, vN);
+    if (hasLocalChartIGM)
+        inheritCharts<CHART_IGM>(tet2igmnew, tet2tetChildren, vN);
+
+    // Special handling of TRANSITIONS
+    inheritTransitions(hf2hfChildren);
+
+    // Update MC mapping
+    updateMCMapping({}, {}, hf2hfChildren, f2fChildren, tet2tetChildren);
 
     return vN;
 }
@@ -206,60 +237,45 @@ void TetMeshManipulator::storeParentChildReconstructors(
     }
 }
 
-map<OVM::CellHandle, Vec3Q> TetMeshManipulator::calculateNewVtxUVW(const OVM::HalfEdgeHandle& heAD,
-                                                                   const OVM::CellHandle& tetStart,
-                                                                   const Q& t) const
+void TetMeshManipulator::storeParentChildReconstructors(
+    const OVM::FaceHandle& fSplit,
+    map<OVM::HalfEdgeHandle, std::pair<OVM::HalfFaceHandle, OVM::CellHandle>>& he2parentHfAndTet) const
 {
     TetMesh& tetMesh = _meshProps.mesh;
-    map<OVM::CellHandle, Vec3Q> tet2newVtxUVW;
-    OVM::VertexHandle vA = tetMesh.from_vertex_handle(heAD);
-    OVM::VertexHandle vD = tetMesh.to_vertex_handle(heAD);
+    auto hf = tetMesh.halfface_handle(fSplit, 0);
+    auto tet = tetMesh.incident_cell(hf);
+    auto hfOpp = tetMesh.opposite_halfface_handle(hf);
+    auto tetOpp = tetMesh.incident_cell(hfOpp);
 
-    Vec3Q uvwNew = t * _meshProps.get<CHART>(tetStart).at(vD) + (Q(1) - t) * _meshProps.get<CHART>(tetStart).at(vA);
-    tet2newVtxUVW[tetStart] = uvwNew;
-    OVM::HalfFaceHandle hfStart;
-    for (auto hf : _meshProps.mesh.halfedge_halffaces(heAD))
+    for (auto he : tetMesh.halfface_halfedges(hf))
     {
-        if (_meshProps.mesh.incident_cell(hf) == tetStart)
-        {
-            hfStart = hf;
-            break;
-        }
+        he2parentHfAndTet[he] = {hf, tet};
+        he2parentHfAndTet[tetMesh.opposite_halfedge_handle(he)] = {hfOpp, tetOpp};
     }
-    assert(hfStart.is_valid());
-    OVM::HalfFaceHandle hfStart2 = _meshProps.mesh.adjacent_halfface_in_cell(hfStart, heAD);
-
-    Transition totalTransition;
-    auto copyUVWtoNeighbors = [this, &totalTransition, &uvwNew, &tet2newVtxUVW](const OVM::HalfFaceHandle& hf)
-    {
-        OVM::CellHandle nextTet = _meshProps.mesh.incident_cell(_meshProps.mesh.opposite_halfface_handle(hf));
-        if (nextTet.is_valid())
-        {
-            totalTransition = totalTransition.chain(_meshProps.hfTransition(hf));
-            tet2newVtxUVW[nextTet] = totalTransition.apply(uvwNew);
-            return false; // dont break afterwards
-        }
-        return true; // break afterwards
-    };
-
-    if (!forEachHfInHeCycle(heAD, hfStart, _meshProps.mesh.opposite_halfface_handle(hfStart2), copyUVWtoNeighbors))
-    {
-        totalTransition = Transition();
-        forEachHfInHeCycle(_meshProps.mesh.opposite_halfedge_handle(heAD),
-                           hfStart2,
-                           _meshProps.mesh.opposite_halfface_handle(hfStart),
-                           copyUVWtoNeighbors);
-    }
-
-#ifndef NDEBUG
-    for (auto tet : tetMesh.halfedge_cells(heAD))
-    {
-        assert(tet2newVtxUVW[tet]
-               == t * _meshProps.get<CHART>(tet).at(vD) + (Q(1) - t) * _meshProps.get<CHART>(tet).at(vA));
-    }
-#endif
-    return tet2newVtxUVW;
 }
+
+template <typename CHART_T>
+map<OVM::CellHandle, Vec3Q> TetMeshManipulator::calculateNewVtxChart(const OVM::HalfEdgeHandle& heAD,
+                                                                     const OVM::CellHandle& tetStart,
+                                                                     const Q& t) const
+{
+    (void)tetStart;
+    map<OVM::CellHandle, Vec3Q> tet2newVtxIGM;
+    OVM::VertexHandle vA = _meshProps.mesh.from_vertex_handle(heAD);
+    OVM::VertexHandle vD = _meshProps.mesh.to_vertex_handle(heAD);
+
+    for (auto tet : _meshProps.mesh.halfedge_cells(heAD))
+        tet2newVtxIGM[tet] = t * _meshProps.get<CHART_T>(tet).at(vD) + (Q(1) - t) * _meshProps.get<CHART_T>(tet).at(vA);
+    return tet2newVtxIGM;
+}
+
+template map<OVM::CellHandle, Vec3Q> TetMeshManipulator::calculateNewVtxChart<CHART>(const OVM::HalfEdgeHandle& heAD,
+                                                                                     const OVM::CellHandle& tetStart,
+                                                                                     const Q& t) const;
+template map<OVM::CellHandle, Vec3Q> TetMeshManipulator::calculateNewVtxChart<CHART_ORIG>(
+    const OVM::HalfEdgeHandle& heAD, const OVM::CellHandle& tetStart, const Q& t) const;
+template map<OVM::CellHandle, Vec3Q> TetMeshManipulator::calculateNewVtxChart<CHART_IGM>(
+    const OVM::HalfEdgeHandle& heAD, const OVM::CellHandle& tetStart, const Q& t) const;
 
 OVM::VertexHandle TetMeshManipulator::splitAndReconstructParentChildRelations(
     const OVM::HalfEdgeHandle& heAD,
@@ -325,6 +341,129 @@ OVM::VertexHandle TetMeshManipulator::splitAndReconstructParentChildRelations(
     }
 
     return vN;
+}
+
+OVM::VertexHandle TetMeshManipulator::splitAndReconstructParentChildRelations(
+    const OVM::FaceHandle& f,
+    const Vec3Q& barCoords,
+    const map<OVM::HalfEdgeHandle, std::pair<OVM::HalfFaceHandle, OVM::CellHandle>>& he2parentHfAndTet,
+    map<OVM::HalfFaceHandle, vector<OVM::HalfFaceHandle>>& hf2childHfs,
+    map<OVM::FaceHandle, vector<OVM::FaceHandle>>& f2childFs,
+    map<OVM::CellHandle, vector<OVM::CellHandle>>& tet2childTets)
+{
+    TetMesh& tetMesh = _meshProps.mesh;
+
+    auto hfParent = tetMesh.halfface_handle(f, 0);
+    auto vs = tetMesh.get_halfface_vertices(hfParent);
+
+    Vec3d newPos(0, 0, 0);
+    newPos = barCoords[0].get_d() * tetMesh.vertex(vs[0]) + barCoords[1].get_d() * tetMesh.vertex(vs[1])
+             + barCoords[2].get_d() * tetMesh.vertex(vs[2]);
+
+    OVM::VertexHandle vN = tetMesh.split_face(f, newPos);
+
+    for (auto hf : tetMesh.vertex_halffaces(vN))
+    {
+        for (auto he : tetMesh.halfface_halfedges(hf))
+        {
+            auto it = he2parentHfAndTet.find(he);
+            if (it != he2parentHfAndTet.end())
+            {
+                hf2childHfs[it->second.first].emplace_back(hf);
+                if (hf.idx() % 2 == 0)
+                    f2childFs[tetMesh.face_handle(it->second.first)].emplace_back(tetMesh.face_handle(hf));
+                if (it->second.second.is_valid())
+                    tet2childTets[it->second.second].emplace_back(tetMesh.incident_cell(hf));
+            }
+        }
+    }
+
+    return vN;
+}
+
+template <typename CHART_T>
+void TetMeshManipulator::inheritCharts(const map<OVM::CellHandle, Vec3Q>& tet2chartnew,
+                                       const map<OVM::CellHandle, vector<OVM::CellHandle>>& tet2tetChildren,
+                                       const OVM::VertexHandle vN)
+{
+    auto& tetMesh = _meshPropsC.mesh;
+    for (const auto& kv : tet2tetChildren)
+    {
+        auto& tetParent = kv.first;
+        auto& tetChildren = kv.second;
+        for (auto tetChild : tetChildren)
+        {
+            auto vs = tetMesh.get_cell_vertices(tetChild);
+            auto& chart = _meshProps.ref<CHART_T>(tetChild);
+            for (auto& v2uvw : chart)
+                if (std::find(vs.begin(), vs.end(), v2uvw.first) == vs.end())
+                {
+                    chart.erase(v2uvw.first);
+                    break;
+                }
+            chart[vN] = tet2chartnew.at(tetParent);
+        }
+    }
+}
+
+template void
+TetMeshManipulator::inheritCharts<CHART>(const map<OVM::CellHandle, Vec3Q>& tet2chartnew,
+                                         const map<OVM::CellHandle, vector<OVM::CellHandle>>& tet2tetChildren,
+                                         const OVM::VertexHandle vN);
+template void
+TetMeshManipulator::inheritCharts<CHART_ORIG>(const map<OVM::CellHandle, Vec3Q>& tet2chartnew,
+                                              const map<OVM::CellHandle, vector<OVM::CellHandle>>& tet2tetChildren,
+                                              const OVM::VertexHandle vN);
+template void
+TetMeshManipulator::inheritCharts<CHART_IGM>(const map<OVM::CellHandle, Vec3Q>& tet2chartnew,
+                                             const map<OVM::CellHandle, vector<OVM::CellHandle>>& tet2tetChildren,
+                                             const OVM::VertexHandle vN);
+
+template <typename CHART_T>
+map<OVM::CellHandle, Vec3Q> TetMeshManipulator::calculateNewVtxChart(const OVM::CellHandle& tetStart,
+                                                                     const OVM::HalfFaceHandle& hfSplit,
+                                                                     const Vec3Q& barCoords) const
+{
+    auto& tetMesh = _meshPropsC.mesh;
+    map<OVM::CellHandle, Vec3Q> tet2chartnew;
+    auto& chart = _meshPropsC.ref<CHART_T>(tetStart);
+    auto vsHf = tetMesh.get_halfface_vertices(hfSplit);
+    Vec3Q& localUVW = (tet2chartnew[tetStart] = Vec3Q(0, 0, 0));
+    for (int i = 0; i < 3; i++)
+        localUVW += barCoords[i] * chart.at(vsHf[i]);
+    tet2chartnew[tetMesh.incident_cell(tetMesh.opposite_halfface_handle(hfSplit))]
+        = _meshPropsC.hfTransition(hfSplit).apply(localUVW);
+    return tet2chartnew;
+}
+
+template map<OVM::CellHandle, Vec3Q> TetMeshManipulator::calculateNewVtxChart<CHART>(const OVM::CellHandle& tetStart,
+                                                                                     const OVM::HalfFaceHandle& hf,
+                                                                                     const Vec3Q& barCoords) const;
+
+template map<OVM::CellHandle, Vec3Q> TetMeshManipulator::calculateNewVtxChart<CHART_ORIG>(
+    const OVM::CellHandle& tetStart, const OVM::HalfFaceHandle& hf, const Vec3Q& barCoords) const;
+
+template map<OVM::CellHandle, Vec3Q> TetMeshManipulator::calculateNewVtxChart<CHART_IGM>(
+    const OVM::CellHandle& tetStart, const OVM::HalfFaceHandle& hf, const Vec3Q& barCoords) const;
+
+void TetMeshManipulator::inheritTransitions(const map<OVM::HalfFaceHandle, vector<OVM::HalfFaceHandle>>& hf2hfChildren)
+{
+    if (_meshProps.isAllocated<TRANSITION>())
+        for (const auto& kv : hf2hfChildren)
+        {
+            auto& hfParent = kv.first;
+            auto& hfChildren = kv.second;
+            for (auto hfChild : hfChildren)
+                _meshProps.setTransition(hfChild, _meshProps.hfTransition(hfParent));
+        }
+    if (_meshProps.isAllocated<TRANSITION_ORIG>())
+        for (const auto& kv : hf2hfChildren)
+        {
+            auto& hfParent = kv.first;
+            auto& hfChildren = kv.second;
+            for (auto hfChild : hfChildren)
+                _meshProps.setTransitionOrig(hfChild, _meshProps.hfTransitionOrig(hfParent));
+        }
 }
 
 void TetMeshManipulator::cloneParentsToChildren(

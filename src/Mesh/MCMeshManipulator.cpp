@@ -39,6 +39,15 @@ vector<OVM::EdgeHandle> MCMeshManipulator::splitArc(const OVM::EdgeHandle& a,
     // TOPOLOGICAL SPLIT
     auto asChild = splitArcTopologically(a, n, affectedPs, affectedBs);
 
+    // This is only a placeholder update to keep total arc length, specifics should be handled outside this method!
+    if (_mcMeshPropsC.isAllocated<ARC_INT_LENGTH>())
+    {
+        int totalLength = _mcMeshPropsC.get<ARC_INT_LENGTH>(a);
+        int length0 = totalLength / 2;
+        _mcMeshProps.set<ARC_INT_LENGTH>(asChild[0], length0);
+        _mcMeshProps.set<ARC_INT_LENGTH>(asChild[0], totalLength - length0);
+    }
+
     vector<OVM::HalfEdgeHandle> hasChild0
         = {mcMesh.halfedge_handle(asChild[0], 0), mcMesh.halfedge_handle(asChild[1], 0)};
     vector<OVM::HalfEdgeHandle> hasChild1
@@ -255,6 +264,12 @@ OVM::EdgeHandle MCMeshManipulator::mergeArcs(const OVM::EdgeHandle& a1,
     _mcMeshProps.cloneAll(has1[1], flipArcDir1 ? hasChild[0] : hasChild[1]);
     _mcMeshProps.set<ARC_IS_SINGULAR>(a,
                                       _mcMeshProps.get<ARC_IS_SINGULAR>(a1) || _mcMeshProps.get<ARC_IS_SINGULAR>(a2));
+    if (_mcMeshProps.isAllocated<ARC_INT_LENGTH>())
+        _mcMeshProps.set<ARC_INT_LENGTH>(a,
+                                         _mcMeshProps.get<ARC_INT_LENGTH>(a1) + _mcMeshProps.get<ARC_INT_LENGTH>(a2));
+    if (_mcMeshProps.isAllocated<ARC_DBL_LENGTH>())
+        _mcMeshProps.set<ARC_DBL_LENGTH>(a,
+                                         _mcMeshProps.get<ARC_DBL_LENGTH>(a1) + _mcMeshProps.get<ARC_DBL_LENGTH>(a2));
 
     // UPDATE INTERNAL REFERENCES
     // remove n from BLOCK_EDGE_NODES, BLOCK_FACE_NODES
@@ -349,6 +364,10 @@ OVM::FaceHandle MCMeshManipulator::mergePatches(const OVM::FaceHandle& p1,
     auto hps2 = mcMesh.face_halffaces(p2);
     auto flipHp2 = !patchFrontsAreAligned(p1, p2, a);
 
+    // While connectivity is valid, collect merged hfs, store them later
+    set<OVM::HalfFaceHandle> mergedHfs;
+    joinPatchFacesAtArc(p1, p2, a, mergedHfs);
+
     // This keeps the halfface normal of halfface[p, 0] equal to that of halfface[p1, 0]
     auto p = mergePatchesTopologically(p1, p2, a, affectedBs);
 
@@ -383,17 +402,8 @@ OVM::FaceHandle MCMeshManipulator::mergePatches(const OVM::FaceHandle& p1,
     updateBlockPatchReferences(pReplacements, affectedBs);
 
     // UPDATE GEOMETRIC EMBEDDING
-    // Join PATCH_MESH_HALFFACES / MC_ARC of a between aSplits
     {
-        const auto& p1hfs = _mcMeshPropsC.ref<PATCH_MESH_HALFFACES>(p1);
-        const auto& p2hfs = _mcMeshPropsC.ref<PATCH_MESH_HALFFACES>(p2);
-        auto& pHfs = _mcMeshProps.ref<PATCH_MESH_HALFFACES>(p);
-        pHfs = p1hfs;
-        if (!flipHp2)
-            pHfs.insert(p2hfs.begin(), p2hfs.end());
-        else
-            for (auto hf : p2hfs)
-                pHfs.insert(tetMesh.opposite_halfface_handle(hf));
+        std::swap(mergedHfs, _mcMeshProps.ref<PATCH_MESH_HALFFACES>(p));
         for (auto hf : _mcMeshProps.ref<PATCH_MESH_HALFFACES>(p))
             _meshProps.set<MC_PATCH>(tetMesh.face_handle(hf), p);
     }
