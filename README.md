@@ -3,7 +3,7 @@
 
 # MC3D – An algorithm for Structured Volume Decomposition
 
-`MC3D` is an implementation of [The 3D Motorcycle Complex for Structured Volume Decomposition \[Brückler et al. 2021\]](https://arxiv.org/abs/2112.05793) (accepted to Eurographics 2022) distributed under GPLv3.
+`MC3D` is an implementation of [The 3D Motorcycle Complex for Structured Volume Decomposition \[Brückler et al. 2021\]](https://arxiv.org/abs/2112.05793) (Eurographics 2022) distributed under GPLv3.
 
 If you make use of `MC3D` in your scientific work, please cite our paper. For your convenience,
 you can use the following bibtex snippet:
@@ -24,14 +24,13 @@ you can use the following bibtex snippet:
 
 ***
 
-![sequence](https://user-images.githubusercontent.com/38473042/152368807-5c51f045-a127-4052-ab04-d3fd60f612fa.png)
-
-
 ## What is the 3D Motorcycle Complex?
 
 The 3D Motorcycle Complex partitions a tetrahedral mesh, equipped with a suitable seamless map, into blocks that are axis-aligned rectangular cuboids under the parametrization. The resulting partition is non-conforming (i.e. one where "T"-junctions exist) and therefore can be made much coarser than similar conforming partitions like the so called base complex (BC).
 
-For a visual impression of what that means, check out our demonstration video:
+<img src="https://user-images.githubusercontent.com/38473042/167612356-f86e171a-078d-4a4c-88aa-8c55d35a771a.png" width="70%">
+
+The construction algorithm is demonstrated in the following video:
 
 https://user-images.githubusercontent.com/38473042/152365682-b0052ec2-df41-447a-bec4-c30865ea71b4.mp4
 
