@@ -184,7 +184,6 @@ Reader::RetCode Reader::readTetsAndCharts()
         }
     }
 
-    // TODO Sanitize
     if (exactMap && !_forceSanitization)
     {
         LOG(INFO) << "Seamless parametrization was read in exact format, skipping sanitization";

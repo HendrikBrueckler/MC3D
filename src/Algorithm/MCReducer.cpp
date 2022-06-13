@@ -12,10 +12,11 @@ MCReducer::MCReducer(TetMeshProps& meshProps)
 {
 }
 
-void MCReducer::init(bool preserveSingularPatches, bool avoidSelfadjacency)
+void MCReducer::init(bool preserveSingularPatches, bool avoidSelfadjacency, bool preserveFeatures)
 {
     _preserveSingularPatches = preserveSingularPatches;
     _avoidSelfadjacency = avoidSelfadjacency;
+    _preserveFeatures = preserveFeatures;
 
     // Reset queue
     while (!_pQ.empty())
@@ -59,7 +60,7 @@ void MCReducer::skipUnremovablePatches()
     while (!_pQ.empty())
     {
         auto p = _pQ.top();
-        if (!isRemovable(p, _preserveSingularPatches, _avoidSelfadjacency))
+        if (!isRemovable(p, _preserveSingularPatches, _avoidSelfadjacency, _preserveFeatures))
             _pQ.pop();
         else
             return;
@@ -122,7 +123,10 @@ bool MCReducer::isReducible() const
     return !_pQ.empty();
 }
 
-bool MCReducer::isRemovable(const OVM::FaceHandle& p, bool preserveSingularPatches, bool avoidSelfadjacency) const
+bool MCReducer::isRemovable(const OVM::FaceHandle& p,
+                            bool preserveSingularPatches,
+                            bool avoidSelfadjacency,
+                            bool preserveFeatures) const
 {
     if (_mcMeshProps.mesh.is_deleted(p))
         return false;
@@ -132,8 +136,27 @@ bool MCReducer::isRemovable(const OVM::FaceHandle& p, bool preserveSingularPatch
 
     if (preserveSingularPatches)
         for (auto a : _mcMeshProps.mesh.face_edges(p))
-            if (_mcMeshProps.get<ARC_IS_SINGULAR>(a))
+            if (_mcMeshProps.get<IS_SINGULAR>(a))
                 return false;
+
+    if (preserveFeatures)
+    {
+        // Do not remove feature patch
+        if (_mcMeshPropsC.isAllocated<IS_FEATURE_F>() && _mcMeshPropsC.get<IS_FEATURE_F>(p))
+            return false;
+
+        // Do not remove patches incident on feature arcs
+        if (_mcMeshPropsC.isAllocated<IS_FEATURE_E>())
+            for (auto a : _mcMeshProps.mesh.face_edges(p))
+                if (_mcMeshProps.get<IS_FEATURE_E>(a))
+                    return false;
+
+        // Do not remove patches incident on feature nodes
+        if (_mcMeshPropsC.isAllocated<IS_FEATURE_V>())
+            for (auto n : _mcMeshProps.mesh.face_vertices(p))
+                if (_mcMeshProps.get<IS_FEATURE_V>(n))
+                    return false;
+    }
 
     // Must not merge a selfadjacent block into a torus
     auto cells = _mcMeshProps.mesh.face_cells(p);
@@ -150,7 +173,8 @@ bool MCReducer::isRemovable(const OVM::FaceHandle& p, bool preserveSingularPatch
                 return false;
     }
 
-    // Must must not merge two blocks, that do not share exactly one cuboid face (aka whose union does not form a cuboid)
+    // Must must not merge two blocks, that do not share exactly one cuboid face (aka whose union does not form a
+    // cuboid)
     for (const auto& cell : cells)
         for (const auto& kv : _mcMeshProps.ref<BLOCK_FACE_PATCHES>(cell))
         {

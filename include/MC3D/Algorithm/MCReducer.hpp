@@ -30,7 +30,7 @@ class MCReducer : public virtual MCMeshManipulator
      * @param preserveSingularPatches IN: whether to not remove walls at singularities
      * @param splitSelfadjacency IN: whether to not remove walls that would lead to selfadjacent blocks
      */
-    void init(bool preserveSingularPatches, bool splitSelfadjacency);
+    void init(bool preserveSingularPatches, bool splitSelfadjacency, bool preserveFeatures);
 
     /**
      * @brief Query whether there still exists a removable patch
@@ -61,7 +61,10 @@ class MCReducer : public virtual MCMeshManipulator
      * @return true if \p p is reducible
      * @return false else
      */
-    bool isRemovable(const OVM::FaceHandle& p, bool preserveSingularPatches, bool avoidSelfadjacency) const;
+    bool isRemovable(const OVM::FaceHandle& p,
+                     bool preserveSingularPatches,
+                     bool avoidSelfadjacency,
+                     bool preserveFeatures) const;
 
     /**
      * @brief Query whether \p a is locally non-minimal and can be removed by merging its exactly 2 incident patches.
@@ -129,6 +132,7 @@ class MCReducer : public virtual MCMeshManipulator
     using PatchQueue = std::priority_queue<OVM::FaceHandle, std::deque<OVM::FaceHandle>, GreatestDistComp>;
     PatchQueue _pQ;                       // Use to sort patches by remove-priority
     bool _preserveSingularPatches = true; // Remember whether current reduction routine should preserve singular patches
+    bool _preserveFeatures = true;        // Remember whether current reduction routine should preserve features
     bool _avoidSelfadjacency = true;      // Current reduction routine should preserve selfadjacency-splitting patches?
 };
 

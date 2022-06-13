@@ -183,7 +183,7 @@ void FullToolChainTest::assertValidMC()
     ASSERT_TRUE(mcMeshProps.isAllocated<PATCH_TRANSITION>());
     ASSERT_TRUE(mcMeshProps.isAllocated<PATCH_MIN_DIST>());
     ASSERT_TRUE(mcMeshProps.isAllocated<PATCH_MESH_HALFFACES>());
-    ASSERT_TRUE(mcMeshProps.isAllocated<ARC_IS_SINGULAR>());
+    ASSERT_TRUE(mcMeshProps.isAllocated<IS_SINGULAR>());
     ASSERT_TRUE(mcMeshProps.isAllocated<ARC_MESH_HALFEDGES>());
     ASSERT_TRUE(mcMeshProps.isAllocated<NODE_MESH_VERTEX>());
 
@@ -439,7 +439,7 @@ void FullToolChainTest::assertValidMC()
                 }
                 if (!isBlockEdge)
                 {
-                bool isSingular = mcMeshProps.get<ARC_IS_SINGULAR>(arc);
+                bool isSingular = mcMeshProps.get<IS_SINGULAR>(arc);
                 bool isFlat = reducer.isFlatArc(arc);
                 auto itPair = mcMeshRaw.halfedge_halffaces(mcMeshRaw.halfedge_handle(arc, 0));
                 vector<OVM::HalfFaceHandle> hps(itPair.first, itPair.second);
@@ -478,12 +478,12 @@ void FullToolChainTest::assertValidMC()
 
     for (auto ha: mcMeshRaw.halfedges())
     {
-        if (!mcMeshProps.get<ARC_IS_SINGULAR>(mcMeshRaw.edge_handle(ha)))
+        if (!mcMeshProps.get<IS_SINGULAR>(mcMeshRaw.edge_handle(ha)))
             continue;
         auto nTo = mcMeshRaw.to_vertex_handle(ha);
         int nIncidentSingularArcs = 0;
         for (auto a: mcMeshRaw.vertex_edges(nTo))
-            if (mcMeshProps.get<ARC_IS_SINGULAR>(a))
+            if (mcMeshProps.get<IS_SINGULAR>(a))
                 nIncidentSingularArcs++;
 
         if (nIncidentSingularArcs == 1)
@@ -542,11 +542,11 @@ void FullToolChainTest::assertValidMC()
     }
 }
 
-void FullToolChainTest::assertPatchesReducible(bool reducible, bool preserveSingularWalls, bool avoidSelfadjacency)
+void FullToolChainTest::assertPatchesReducible(bool reducible, bool preserveSingularWalls, bool avoidSelfadjacency, bool preserveFeatures)
 {
     bool isReducible = false;
     for (auto p : mcMeshRaw.faces())
-        if (reducer.isRemovable(p, preserveSingularWalls, avoidSelfadjacency))
+        if (reducer.isRemovable(p, preserveSingularWalls, avoidSelfadjacency, preserveFeatures))
             isReducible = true;
     ASSERT_EQ(isReducible, reducible);
 }
@@ -590,7 +590,6 @@ void FullToolChainTest::assertValidIntegerArcLengths()
             if (checked[dir])
                 continue;
 
-            // TODO does not work with negative lengths
             int length = 0;
             for (auto halfarc : halfarcs)
                 length += mcMeshProps.get<ARC_INT_LENGTH>(mcMeshRaw.edge_handle(halfarc));

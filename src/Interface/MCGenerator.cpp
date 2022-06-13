@@ -51,6 +51,10 @@ MCGenerator::RetCode MCGenerator::traceMC(bool splitTori, bool splitSelfadjacenc
 
     if (spawner.spawnSingularityMotorcycles() != MotorcycleSpawner::SUCCESS)
         return SPAWNING_FAILED;
+    if ((_meshPropsC.isAllocated<IS_FEATURE_E>() || _meshPropsC.isAllocated<IS_FEATURE_F>()
+         || _meshPropsC.isAllocated<IS_FEATURE_V>())
+        && spawner.spawnFeatureMotorcycles() != MotorcycleSpawner::SUCCESS)
+        return SPAWNING_FAILED;
     if (tracer.traceAllMotorcycles() != MotorcycleTracer::SUCCESS)
         return TRACING_FAILED;
 
@@ -114,7 +118,7 @@ MCGenerator::RetCode MCGenerator::reduceMC(bool preserveSingularWalls, bool avoi
               << " walls.";
 
     MCReducer reducer(_meshProps);
-    reducer.init(preserveSingularWalls, avoidSelfadjacency);
+    reducer.init(preserveSingularWalls, avoidSelfadjacency, true);
 
     while (reducer.isReducible())
         reducer.removeNextPatch();

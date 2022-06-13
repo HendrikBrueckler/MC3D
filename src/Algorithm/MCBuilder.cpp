@@ -199,14 +199,13 @@ MCBuilder::gatherBlockData(const OVM::CellHandle& tetStart, vector<bool>& tetVis
                             if (visitedTetCorners.find({tet, v}) != visitedTetCorners.end())
                                 continue;
 
-                            forVertexNeighbourTetsInBlock(
-                                v,
-                                tet,
-                                [&visitedTetCorners, &v](const OVM::CellHandle tetNeighbor)
-                                {
-                                    visitedTetCorners.insert({tetNeighbor, v});
-                                    return false;
-                                });
+                            forVertexNeighbourTetsInBlock(v,
+                                                          tet,
+                                                          [&visitedTetCorners, &v](const OVM::CellHandle tetNeighbor)
+                                                          {
+                                                              visitedTetCorners.insert({tetNeighbor, v});
+                                                              return false;
+                                                          });
 
                             UVWDir hfNormal3 = UVWDir::NONE;
                             forVertexNeighbourHalffacesInBlock(
@@ -323,6 +322,8 @@ MCBuilder::RetCode MCBuilder::createAndMapNodes()
 
     _meshProps.allocate<MC_NODE>(OVM::VertexHandle(-1));
     mcMeshProps.allocate<NODE_MESH_VERTEX>(OVM::VertexHandle(-1));
+    if (_meshProps.isAllocated<IS_FEATURE_V>())
+        mcMeshProps.allocate<IS_FEATURE_V>(false);
 
     // Detect all vertices with >2 arcs incident as nodes
     // and map mutually
@@ -340,9 +341,15 @@ MCBuilder::RetCode MCBuilder::createAndMapNodes()
         if (nArcEdges > 2)
         {
             _isNode[v.idx()] = true;
-            auto vNew = mcMesh.add_vertex(tetMesh.vertex(v));
-            _meshProps.set<MC_NODE>(v, vNew);
-            mcMeshProps.set<NODE_MESH_VERTEX>(vNew, v);
+            auto n = mcMesh.add_vertex(tetMesh.vertex(v));
+            if (_meshProps.isAllocated<IS_FEATURE_V>() && mcMeshProps.isAllocated<IS_FEATURE_V>())
+            {
+                if (_meshProps.get<IS_FEATURE_V>(v))
+                    std::cout << "Set feature node " << n << " from " << v << std::endl;
+                mcMeshProps.set<IS_FEATURE_V>(n, _meshProps.get<IS_FEATURE_V>(v));
+            }
+            _meshProps.set<MC_NODE>(v, n);
+            mcMeshProps.set<NODE_MESH_VERTEX>(n, v);
         }
     }
 
@@ -357,7 +364,9 @@ MCBuilder::RetCode MCBuilder::createAndMapArcs()
 
     _meshProps.allocate<MC_ARC>(OVM::EdgeHandle(-1));
     mcMeshProps.allocate<ARC_MESH_HALFEDGES>(list<OVM::HalfEdgeHandle>());
-    mcMeshProps.allocate<ARC_IS_SINGULAR>(false);
+    mcMeshProps.allocate<IS_SINGULAR>(false);
+    if (_meshProps.isAllocated<IS_FEATURE_E>())
+        mcMeshProps.allocate<IS_FEATURE_E>(false);
     mcMeshProps.allocate<CHILD_EDGES>();
     mcMeshProps.allocate<CHILD_HALFEDGES>();
 
@@ -428,7 +437,21 @@ MCBuilder::RetCode MCBuilder::createAndMapArcs()
                 assert(arc.is_valid());
                 assert(mcMesh.from_vertex_handle(mcMesh.halfedge_handle(arc, 0)) == nodeFrom);
                 mcMeshProps.set<ARC_MESH_HALFEDGES>(arc, chain);
-                mcMeshProps.set<ARC_IS_SINGULAR>(arc, _meshProps.get<IS_SINGULAR>(tetMesh.edge_handle(chain.front())));
+                mcMeshProps.set<IS_SINGULAR>(arc, _meshProps.get<IS_SINGULAR>(tetMesh.edge_handle(chain.front())));
+
+                if (_meshProps.isAllocated<IS_FEATURE_E>() && mcMeshProps.isAllocated<IS_FEATURE_E>())
+                {
+                    int nFeatureArcs = 0;
+                    int nNonFeatureArcs = 0;
+                    for (auto he : chain)
+                        if (_meshProps.get<IS_FEATURE_E>(tetMesh.edge_handle(he)))
+                            nFeatureArcs++;
+                        else
+                            nNonFeatureArcs++;
+                    assert(nFeatureArcs == 0 || nNonFeatureArcs == 0);
+                    mcMeshProps.set<IS_FEATURE_E>(arc, nFeatureArcs != 0);
+                }
+
                 for (auto he : chain)
                     _meshProps.set<MC_ARC>(tetMesh.edge_handle(he), arc);
             }
@@ -450,6 +473,8 @@ MCBuilder::RetCode MCBuilder::createAndMapPatches()
     mcMeshProps.allocate<PATCH_MIN_DIST>();
     mcMeshProps.allocate<CHILD_FACES>();
     mcMeshProps.allocate<CHILD_HALFFACES>();
+    if (_meshProps.isAllocated<IS_FEATURE_F>())
+        mcMeshProps.allocate<IS_FEATURE_F>(false);
 
     // Connect patch halffaces to complete patches
     // and map mutually
@@ -529,6 +554,20 @@ MCBuilder::RetCode MCBuilder::createAndMapPatches()
                              *mcMesh.hfhe_iter(mcMesh.halfface_handle(patch, 0)))
                    != boundaryHalfarcsOrdered.end());
             mcMeshProps.set<PATCH_MESH_HALFFACES>(patch, patchHfs);
+
+            if (_meshProps.isAllocated<IS_FEATURE_F>() && mcMeshProps.isAllocated<IS_FEATURE_F>())
+            {
+                int nFeatureFaces = 0;
+                int nNonFeatureFaces = 0;
+                for (auto hf : patchHfs)
+                        if (_meshProps.get<IS_FEATURE_F>(tetMesh.face_handle(hf)))
+                            nFeatureFaces++;
+                        else
+                            nNonFeatureFaces++;
+                    assert(nFeatureFaces == 0 || nNonFeatureFaces == 0);
+                assert(nFeatureFaces == 0 || nNonFeatureFaces == 0);
+                mcMeshProps.set<IS_FEATURE_F>(patch, nFeatureFaces != 0);
+            }
 
             mcMeshProps.set<PATCH_TRANSITION>(patch, _meshProps.hfTransition(*patchHfs.begin()));
             float minDist = FLT_MAX;
@@ -775,7 +814,7 @@ void MCBuilder::mark90degreeBoundaryArcsAsSingular()
                 auto itPair = mcMesh.edge_cells(a);
                 int numBlocks = std::distance(itPair.first, itPair.second);
                 if (numBlocks == 1)
-                    mcMeshProps.set<ARC_IS_SINGULAR>(a, true);
+                    mcMeshProps.set<IS_SINGULAR>(a, true);
             }
 }
 

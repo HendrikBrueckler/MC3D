@@ -45,7 +45,8 @@ class FullToolChainTest : public ::testing::TestWithParam<std::string>
 
     void assertValidMC();
 
-    void assertPatchesReducible(bool reducible, bool preserveSingularWalls, bool avoidSelfadjacency);
+    void
+    assertPatchesReducible(bool reducible, bool preserveSingularWalls, bool avoidSelfadjacency, bool preserveFeatures);
 
     void assertNodesReducible(bool reducible);
 

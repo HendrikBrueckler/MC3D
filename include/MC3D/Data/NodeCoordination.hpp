@@ -11,12 +11,24 @@ namespace mc3d
 /**
  * @brief Differentiate three basic node types based on regularity/singularity
  */
-enum class NodeType
+enum class SingularNodeType
 {
-    REGULAR,       // Regular node, nSingularArcs == 0
-    SEMI_SINGULAR, // On a singular arc, nSingularArcs == 2
-    SINGULAR       // Singular arc branching point (nSingularArcs != 0, != 2)
+    REGULAR,      // Regular node, nSingularArcs == 0
+    SEMI_SINGULAR,// On a singular arc, nSingularArcs == 2
+    SINGULAR,     // Singular arc branching point (nSingularArcs != 0, != 2)
 };
+
+/**
+ * @brief Differentiate three basic node types based on feature constraints
+ */
+enum class FeatureNodeType
+{
+    REGULAR,      // Regular node, nFeatureArcs == 0
+    SEMI_FEATURE, // On a singular arc, nFeatureArcs == 2
+    FEATURE,      // Feature arc branching point (nFeatureArcs != 0, != 2)
+};
+
+using NodeType = std::pair<SingularNodeType, FeatureNodeType>;
 
 /**
  * @brief Base node coordination struct
@@ -74,11 +86,6 @@ struct NonSingNodeCoordination : public NodeCoordination
      * @brief Whether the principal direction halfarc is a boundary halfarc
      */
     bool haPrincipalBoundary;
-
-    /**
-     * @brief Whether this node is on a singular link (non-branch).
-     */
-    bool semiSingular;
 
     /**
      * @brief Degree of symmetry around principal dir

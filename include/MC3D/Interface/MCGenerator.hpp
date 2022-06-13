@@ -56,7 +56,7 @@ class MCGenerator : public TetMeshManipulator
      *                       MC_BLOCK, MC_PATCH, MC_ARC, MC_NODE
      * Allocates all MCMesh properties.
      *
-     * @param splitTori IN: whether to split toroidal blocks
+     * @param preserveSingularWalls IN: whether to keep all walls around singularities
      * @param splitSelfadjacency IN: whether to split self-adjacent blocks
      * @return RetCode SUCCESS or errorcode
      */

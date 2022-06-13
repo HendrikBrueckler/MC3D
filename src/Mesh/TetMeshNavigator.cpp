@@ -361,7 +361,7 @@ UVWDir TetMeshNavigator::axisAlignedHalfFaceNormal(const OVM::HalfFaceHandle& hf
             }
         }
     }
-    return UVWDir::NONE;
+    throw std::logic_error("axisAlignedHalfFaceNormal() received non axis aligned halfface");
 }
 
 UVWDir TetMeshNavigator::edgeDirection(const OVM::EdgeHandle& e, const OVM::CellHandle& tet) const
@@ -380,6 +380,8 @@ double TetMeshNavigator::edgeLengthUVW(const OVM::EdgeHandle& e) const
     assert(_meshPropsC.isAllocated<CHART>());
 
     auto tet = *_meshPropsC.mesh.ec_iter(e);
+    if (!tet.is_valid())
+        return 0;
     auto he = _meshPropsC.mesh.halfedge_handle(e, 0);
 
     Vec3d uvw1 = Vec3Q2d(_meshPropsC.ref<CHART>(tet).at(_meshPropsC.mesh.from_vertex_handle(he)));

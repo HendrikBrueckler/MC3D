@@ -146,7 +146,7 @@ class MCBuilder : public virtual TetMeshManipulator
     RetCode createAndMapBlocks();
 
     /**
-     * @brief Marks 90 degree boundary arcs as ARC_IS_SINGULAR
+     * @brief Marks 90 degree boundary arcs as IS_SINGULAR
      */
     void mark90degreeBoundaryArcsAsSingular();
 

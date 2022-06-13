@@ -21,7 +21,7 @@ bool MCMeshNavigator::isFlatArc(const OVM::EdgeHandle& arc) const
     auto itPair = mesh.halfedge_halffaces(ha);
     vector<OVM::HalfFaceHandle> hps(itPair.first, itPair.second);
     if (hps.size() != 2)
-        assert(_mcMeshPropsC.get<ARC_IS_SINGULAR>(arc));
+        assert(_mcMeshPropsC.get<IS_SINGULAR>(arc));
 #endif
 
     return true;
@@ -346,22 +346,46 @@ UVWDir MCMeshNavigator::halfarcDirInBlock(const OVM::HalfEdgeHandle& ha, const O
 NodeType MCMeshNavigator::nodeType(const OVM::VertexHandle& n) const
 {
     auto& mcMesh = _mcMeshPropsC.mesh;
+
+    NodeType type;
     int nSingularArcs = 0;
     for (auto a : mcMesh.vertex_edges(n))
-        if (_mcMeshPropsC.get<ARC_IS_SINGULAR>(a))
+        if (_mcMeshPropsC.get<IS_SINGULAR>(a))
             nSingularArcs++;
     if (nSingularArcs == 0)
-        return NodeType::REGULAR;
-    if (nSingularArcs == 2)
-        return NodeType::SEMI_SINGULAR;
-    return NodeType::SINGULAR;
+        type.first = SingularNodeType::REGULAR;
+    else if (nSingularArcs == 2)
+        type.first = SingularNodeType::SEMI_SINGULAR;
+    else
+        type.first = SingularNodeType::SINGULAR;
+
+    if (_mcMeshPropsC.isAllocated<IS_FEATURE_V>() && _mcMeshPropsC.get<IS_FEATURE_V>(n))
+        type.second = FeatureNodeType::FEATURE;
+    else if (_mcMeshPropsC.isAllocated<IS_FEATURE_E>())
+    {
+        int nFeatureArcs = 0;
+        for (auto a : mcMesh.vertex_edges(n))
+            if (_mcMeshPropsC.get<IS_FEATURE_E>(a))
+                nFeatureArcs++;
+        if (nFeatureArcs == 0)
+            type.second = FeatureNodeType::REGULAR;
+        else if (nFeatureArcs == 2)
+            type.second = FeatureNodeType::SEMI_FEATURE;
+        else
+        {
+            // Should never happen, because these types of nodes should automatically have been assigned IS_FEATURE_V
+            assert(false);
+            type.second = FeatureNodeType::FEATURE;
+        }
+    }
+    return type;
 }
 
 std::shared_ptr<NodeCoordination> MCMeshNavigator::getNodeCoordination(const OVM::VertexHandle& n,
                                                                        const OVM::CellHandle& bRef,
                                                                        OVM::HalfEdgeHandle haPrincipal) const
 {
-    if (nodeType(n) == NodeType::SINGULAR)
+    if (nodeType(n).first == SingularNodeType::SINGULAR)
         return std::make_shared<SingNodeCoordination>(singularNodeCoordination(n, bRef));
     else
         return std::make_shared<NonSingNodeCoordination>(nonSingularNodeCoordination(n, bRef, haPrincipal));
@@ -376,7 +400,7 @@ NonSingNodeCoordination MCMeshNavigator::nonSingularNodeCoordination(const OVM::
 #ifndef NDEBUG
     int numSingArcs = 0;
     for (auto ha : mcMesh.outgoing_halfedges(n))
-        if (_mcMeshPropsC.get<ARC_IS_SINGULAR>(mcMesh.edge_handle(ha)))
+        if (_mcMeshPropsC.get<IS_SINGULAR>(mcMesh.edge_handle(ha)))
             numSingArcs++;
     assert(numSingArcs == 2 || numSingArcs == 0);
 #endif
@@ -385,14 +409,18 @@ NonSingNodeCoordination MCMeshNavigator::nonSingularNodeCoordination(const OVM::
     nc.nBoundary = mcMesh.is_boundary(n);
 
     nc.nodeType = nodeType(n);
-    nc.semiSingular = nc.nodeType == NodeType::SEMI_SINGULAR;
+    bool semiSingular = nc.nodeType.first == SingularNodeType::SEMI_SINGULAR;
+    bool semiFeature = nc.nodeType.second == FeatureNodeType::SEMI_FEATURE;
 
     if (!haPrincipal.is_valid())
         for (auto ha : mcMesh.cell_halfedges(bRef))
             if (mcMesh.from_vertex_handle(ha) == n)
             {
-                if ((nc.semiSingular && _mcMeshPropsC.get<ARC_IS_SINGULAR>(mcMesh.edge_handle(ha)))
-                    || (!nc.semiSingular && (!nc.nBoundary || (nc.nBoundary && mcMesh.is_boundary(ha)))))
+                if ((semiSingular && _mcMeshPropsC.get<IS_SINGULAR>(mcMesh.edge_handle(ha)))
+                    || (!semiSingular
+                        && ((semiFeature && _mcMeshPropsC.isAllocated<IS_FEATURE_E>()
+                             && _mcMeshPropsC.get<IS_FEATURE_E>(mcMesh.edge_handle(ha)))
+                            || (!nc.nBoundary || (nc.nBoundary && mcMesh.is_boundary(ha))))))
                 {
                     haPrincipal = ha;
                     break;
@@ -410,7 +438,7 @@ NonSingNodeCoordination MCMeshNavigator::nonSingularNodeCoordination(const OVM::
     // Determine principal ha and its opposite ha
     for (auto ha : mcMesh.outgoing_halfedges(n))
     {
-        if (!nc.semiSingular || _mcMeshPropsC.get<ARC_IS_SINGULAR>(mcMesh.edge_handle(ha)))
+        if (!semiSingular || _mcMeshPropsC.get<IS_SINGULAR>(mcMesh.edge_handle(ha)))
         {
             auto b = *mcMesh.hec_iter(ha);
             auto globalDir = nc.b2trans.at(b).invert().rotate(halfarcDirInBlock(ha, b));
@@ -418,7 +446,7 @@ NonSingNodeCoordination MCMeshNavigator::nonSingularNodeCoordination(const OVM::
                 haOpp = ha;
         }
     }
-    assert(!nc.semiSingular || haOpp.is_valid());
+    assert(!semiSingular || haOpp.is_valid());
 
     nc.haPrincipalBoundary = mcMesh.is_boundary(haPrincipal);
 
@@ -738,14 +766,14 @@ SingNodeCoordination MCMeshNavigator::singularNodeCoordination(const OVM::Vertex
 #ifndef NDEBUG
     int numSingArcs = 0;
     for (auto ha : mcMesh.outgoing_halfedges(n))
-        if (_mcMeshPropsC.get<ARC_IS_SINGULAR>(mcMesh.edge_handle(ha)))
+        if (_mcMeshPropsC.get<IS_SINGULAR>(mcMesh.edge_handle(ha)))
             numSingArcs++;
     assert(numSingArcs != 0 && numSingArcs != 2);
 #endif
 
     SingNodeCoordination nc;
     nc.n = n;
-    nc.nodeType = NodeType::SINGULAR;
+    nc.nodeType = nodeType(n);
     nc.bRef = bRef;
     nc.principalDir = UVWDir::NONE;
 
@@ -757,13 +785,12 @@ SingNodeCoordination MCMeshNavigator::singularNodeCoordination(const OVM::Vertex
         auto& ncPartial = nc.ha2coordination[haPrincipal];
 
         ncPartial.n = n;
-        ncPartial.nodeType = NodeType::SINGULAR;
+        ncPartial.nodeType = nc.nodeType;
         ncPartial.bRef = *mcMesh.hec_iter(haPrincipal);
         ncPartial.principalDir = halfarcDirInBlock(haPrincipal, ncPartial.bRef);
         ncPartial.b2trans = determineTransitionsAroundNode(ncPartial.n, ncPartial.bRef, Transition());
         ncPartial.nBoundary = mcMesh.is_boundary(n);
         ncPartial.haPrincipalBoundary = mcMesh.is_boundary(haPrincipal);
-        ncPartial.semiSingular = _mcMeshPropsC.get<ARC_IS_SINGULAR>(mcMesh.edge_handle(haPrincipal));
 
         ncPartial.dir2ha[NonSingNodeCoordination::PRINCIPAL_DIR] = haPrincipal;
 
@@ -1092,22 +1119,22 @@ void MCMeshNavigator::getBoundaryRegions(vector<BoundaryRegion>& boundaryRegions
             list<OVM::HalfFaceHandle> hpQ({hp});
             hpVisited[hp.idx()] = true;
             hpBoundary2boundaryRegionIdx[hp] = idx;
-            boundaryRegion.patchHps.insert(hp);
+            boundaryRegion.hps.insert(hp);
             while (!hpQ.empty())
             {
                 auto hpCurrent = hpQ.front();
                 hpQ.pop_front();
 
                 for (auto nCurrent : mcMesh.halfface_vertices(hpCurrent))
-                    boundaryRegion.patchNs.insert(nCurrent);
+                    boundaryRegion.ns.insert(nCurrent);
 
                 for (auto a : mcMesh.halfface_edges(hpCurrent))
-                    if (!_mcMeshPropsC.get<ARC_IS_SINGULAR>(a))
+                    if (!_mcMeshPropsC.get<IS_SINGULAR>(a))
                         for (auto hpNext : mcMesh.edge_halffaces(a))
                             if (!hpVisited[hpNext.idx()] && mcMesh.is_boundary(hpNext))
                             {
                                 hpVisited[hpNext.idx()] = true;
-                                boundaryRegion.patchHps.insert(hpNext);
+                                boundaryRegion.hps.insert(hpNext);
                                 hpQ.emplace_back(hpNext);
                                 hpBoundary2boundaryRegionIdx[hpNext] = idx;
                                 break;
@@ -1115,7 +1142,7 @@ void MCMeshNavigator::getBoundaryRegions(vector<BoundaryRegion>& boundaryRegions
             }
             // Determine boundary
             set<OVM::HalfEdgeHandle> boundary;
-            for (auto hpSurface : boundaryRegion.patchHps)
+            for (auto hpSurface : boundaryRegion.hps)
                 for (auto ha : mcMesh.halfface_halfedges(hpSurface))
                 {
                     auto it = boundary.find(mcMesh.opposite_halfedge_handle(ha));
@@ -1156,73 +1183,99 @@ void MCMeshNavigator::getBoundaryRegions(vector<BoundaryRegion>& boundaryRegions
     }
 }
 
-void MCMeshNavigator::getSingularLinks(vector<SingularLink>& singularLinks,
-                                       map<OVM::EdgeHandle, int>& aSing2singularLinkIdx,
-                                       map<OVM::VertexHandle, vector<int>>& n2singularLinksOut,
-                                       map<OVM::VertexHandle, vector<int>>& n2singularLinksIn) const
+void MCMeshNavigator::getCriticalLinks(vector<CriticalLink>& criticalLinks,
+                                       map<OVM::EdgeHandle, int>& a2criticalLinkIdx,
+                                       map<OVM::VertexHandle, vector<int>>& n2criticalLinksOut,
+                                       map<OVM::VertexHandle, vector<int>>& n2criticalLinksIn,
+                                       bool includeFeatures) const
 {
     const MCMesh& mcMesh = _mcMeshPropsC.mesh;
 
-    singularLinks.clear();
-    aSing2singularLinkIdx.clear();
-    n2singularLinksOut.clear();
-    n2singularLinksIn.clear();
+    criticalLinks.clear();
+    a2criticalLinkIdx.clear();
+    n2criticalLinksOut.clear();
+    n2criticalLinksIn.clear();
 
-    vector<OVM::EdgeHandle> singularArcs;
+    vector<bool> arcIsCritical(mcMesh.n_edges(), false);
     for (auto a : mcMesh.edges())
-        if (_mcMeshPropsC.get<ARC_IS_SINGULAR>(a))
-            singularArcs.emplace_back(a);
+        if (_mcMeshPropsC.get<IS_SINGULAR>(a)
+            || (includeFeatures && _mcMeshPropsC.isAllocated<IS_FEATURE_E>() && _mcMeshPropsC.get<IS_FEATURE_E>(a)))
+            arcIsCritical[a.idx()] = true;
 
     set<OVM::VertexHandle> nsStart;
     for (auto n : mcMesh.vertices())
     {
-        int nSingularEdges = 0;
-        for (auto a : mcMesh.vertex_edges(n))
-            if (_mcMeshPropsC.get<ARC_IS_SINGULAR>(a))
-                nSingularEdges++;
-        if (nSingularEdges != 2 && nSingularEdges != 0)
+        auto type = nodeType(n);
+        if (type.first == SingularNodeType::SINGULAR || type.second == FeatureNodeType::FEATURE
+            || (type.first == SingularNodeType::SEMI_SINGULAR && type.second == FeatureNodeType::SEMI_FEATURE))
             nsStart.insert(n);
     }
 
     for (auto nStart : nsStart)
+    {
+        bool hasCriticalArc = false;
         for (auto ha : mcMesh.outgoing_halfedges(nStart))
         {
             auto a = mcMesh.edge_handle(ha);
-            if (_mcMeshPropsC.get<ARC_IS_SINGULAR>(a) && aSing2singularLinkIdx.find(a) == aSing2singularLinkIdx.end())
+            if (arcIsCritical[a.idx()])
             {
-                traceSingularLink(
-                    ha, nsStart, singularLinks, aSing2singularLinkIdx, n2singularLinksOut, n2singularLinksIn);
+                hasCriticalArc = true;
+                if (a2criticalLinkIdx.find(a) == a2criticalLinkIdx.end())
+                {
+                    traceCriticalLink(ha,
+                                    arcIsCritical,
+                                    nsStart,
+                                    criticalLinks,
+                                    a2criticalLinkIdx,
+                                    n2criticalLinksOut,
+                                    n2criticalLinksIn);
+                }
             }
         }
-
-    for (auto aSing : singularArcs)
-        if (aSing2singularLinkIdx.find(aSing) == aSing2singularLinkIdx.end())
+        if (!hasCriticalArc)
         {
-            traceSingularLink(mcMesh.halfedge_handle(aSing, 0),
+            CriticalLink link;
+            link.cyclic = false;
+            link.nFrom = nStart;
+            link.nTo = nStart;
+            link.length = 0;
+            link.pathHas = {};
+            criticalLinks.emplace_back(link);
+            n2criticalLinksIn[nStart].emplace_back(criticalLinks.size() - 1);
+            n2criticalLinksOut[nStart].emplace_back(criticalLinks.size() - 1);
+        }
+    }
+
+    for (auto a : mcMesh.edges())
+        if (arcIsCritical[a.idx()] && a2criticalLinkIdx.find(a) == a2criticalLinkIdx.end())
+        {
+            traceCriticalLink(mcMesh.halfedge_handle(a, 0),
+                              arcIsCritical,
                               nsStart,
-                              singularLinks,
-                              aSing2singularLinkIdx,
-                              n2singularLinksOut,
-                              n2singularLinksIn);
+                              criticalLinks,
+                              a2criticalLinkIdx,
+                              n2criticalLinksOut,
+                              n2criticalLinksIn);
         }
 }
 
-void MCMeshNavigator::traceSingularLink(const OVM::HalfEdgeHandle& haStart,
+void MCMeshNavigator::traceCriticalLink(const OVM::HalfEdgeHandle& haStart,
+                                        const vector<bool>& arcIsCritical,
                                         set<OVM::VertexHandle>& nsStop,
-                                        vector<SingularLink>& singularLinks,
-                                        map<OVM::EdgeHandle, int>& aSing2singularLinkIdx,
-                                        map<OVM::VertexHandle, vector<int>>& n2singularLinksOut,
-                                        map<OVM::VertexHandle, vector<int>>& n2singularLinksIn) const
+                                        vector<CriticalLink>& criticalLinks,
+                                        map<OVM::EdgeHandle, int>& a2criticalLinkIdx,
+                                        map<OVM::VertexHandle, vector<int>>& n2criticalLinksOut,
+                                        map<OVM::VertexHandle, vector<int>>& n2criticalLinksIn) const
 {
     const MCMesh& mcMesh = _mcMeshPropsC.mesh;
 
-    auto idx = singularLinks.size();
-    singularLinks.emplace_back();
-    auto& singPath = singularLinks.back();
-    singPath.id = singularLinks.size() - 1;
+    auto idx = criticalLinks.size();
+    criticalLinks.emplace_back();
+    auto& criticalPath = criticalLinks.back();
+    criticalPath.id = criticalLinks.size() - 1;
     auto nStart = mcMesh.from_vertex_handle(haStart);
-    singPath.cyclic = nsStop.find(nStart) == nsStop.end();
-    if (singPath.cyclic)
+    criticalPath.cyclic = nsStop.find(nStart) == nsStop.end();
+    if (criticalPath.cyclic)
         nsStop.insert(nStart);
 
     // Gather Halfedges
@@ -1231,10 +1284,9 @@ void MCMeshNavigator::traceSingularLink(const OVM::HalfEdgeHandle& haStart,
     auto nCurr = mcMesh.to_vertex_handle(haCurr);
     while (nsStop.find(nCurr) == nsStop.end())
     {
-        singPath.pathHas.emplace_back(haCurr);
+        criticalPath.pathHas.emplace_back(haCurr);
         for (auto haNext : mcMesh.outgoing_halfedges(mcMesh.to_vertex_handle(haCurr)))
-            if (mcMesh.opposite_halfedge_handle(haNext) != haCurr
-                && _mcMeshPropsC.get<ARC_IS_SINGULAR>(mcMesh.edge_handle(haNext)))
+            if (mcMesh.opposite_halfedge_handle(haNext) != haCurr && arcIsCritical[mcMesh.edge_handle(haNext).idx()])
             {
                 haCurr = haNext;
                 aCurr = mcMesh.edge_handle(haCurr);
@@ -1242,19 +1294,19 @@ void MCMeshNavigator::traceSingularLink(const OVM::HalfEdgeHandle& haStart,
                 break;
             }
     }
-    singPath.pathHas.emplace_back(haCurr);
+    criticalPath.pathHas.emplace_back(haCurr);
 
     // Gather meta info
-    singPath.nFrom = nStart;
-    singPath.nTo = mcMesh.to_vertex_handle(singPath.pathHas.back());
-    n2singularLinksOut[singPath.nFrom].emplace_back(idx);
-    n2singularLinksIn[singPath.nTo].emplace_back(idx);
-    singPath.length = 0;
-    for (auto ha : singPath.pathHas)
+    criticalPath.nFrom = nStart;
+    criticalPath.nTo = mcMesh.to_vertex_handle(criticalPath.pathHas.back());
+    n2criticalLinksOut[criticalPath.nFrom].emplace_back(idx);
+    n2criticalLinksIn[criticalPath.nTo].emplace_back(idx);
+    criticalPath.length = 0;
+    for (auto ha : criticalPath.pathHas)
     {
-        aSing2singularLinkIdx[mcMesh.edge_handle(ha)] = idx;
+        a2criticalLinkIdx[mcMesh.edge_handle(ha)] = idx;
         if (_mcMeshPropsC.isAllocated<ARC_INT_LENGTH>())
-            singPath.length += _mcMeshPropsC.get<ARC_INT_LENGTH>(mcMesh.edge_handle(ha));
+            criticalPath.length += _mcMeshPropsC.get<ARC_INT_LENGTH>(mcMesh.edge_handle(ha));
     }
 }
 

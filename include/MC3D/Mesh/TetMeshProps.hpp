@@ -14,7 +14,6 @@ class MCMeshProps;
 MC3D_PROPERTY(CHART,           Cell, MC3D_ARG(map<OVM::VertexHandle, Vec3Q>));
 MC3D_PROPERTY(CHART_ORIG,      Cell, MC3D_ARG(map<OVM::VertexHandle, Vec3Q>));
 MC3D_PROPERTY(CHART_IGM,       Cell, MC3D_ARG(map<OVM::VertexHandle, Vec3Q>));
-MC3D_PROPERTY(IS_SINGULAR,     Edge, bool);
 MC3D_PROPERTY(IS_ARC,          Edge, bool);
 MC3D_PROPERTY(IS_WALL,         Face, bool);
 MC3D_PROPERTY(IS_ORIGINAL,     Face, bool);
@@ -40,6 +39,9 @@ using TetMeshPropsBase = MeshPropsInterface<TetMesh,
                                             TRANSITION,
                                             TRANSITION_ORIG,
                                             IS_SINGULAR,
+                                            IS_FEATURE_E,
+                                            IS_FEATURE_V,
+                                            IS_FEATURE_F,
                                             IS_WALL,
                                             IS_ORIGINAL,
                                             IS_ORIGINAL_VTX,

@@ -1,8 +1,8 @@
 #include "./TestUtils.hpp"
 
-#include "MC3D/Algorithm/SingularityInitializer.hpp"
 #include "MC3D/Algorithm/MCBuilder.hpp"
 #include "MC3D/Algorithm/MCReducer.hpp"
+#include "MC3D/Algorithm/SingularityInitializer.hpp"
 
 #include <fstream>
 #include <limits>
@@ -44,27 +44,27 @@ class MCReducerSuccessTest : public MCReducerTest
     {
         for (bool preserveSingularWalls : {true, false})
             for (bool avoidSelfadjacency : {true, false})
-            {
-                reducer.init(preserveSingularWalls, avoidSelfadjacency);
-                bool isReducible = reducer.isReducible();
-                assertPatchesReducible(isReducible, preserveSingularWalls, avoidSelfadjacency);
-                assertArcsReducible(false);
-                assertNodesReducible(false);
-            }
+                for (bool preserveFeatures : {true, false})
+                {
+                    reducer.init(preserveSingularWalls, avoidSelfadjacency, preserveFeatures);
+                    bool isReducible = reducer.isReducible();
+                    assertPatchesReducible(isReducible, preserveSingularWalls, avoidSelfadjacency);
+                    assertArcsReducible(false);
+                    assertNodesReducible(false);
+                }
 
         LOG(INFO) << "Starting to reduce MC with " << mcMeshRaw.n_logical_cells() << " blocks, "
                   << mcMeshRaw.n_logical_faces() << " patches, " << mcMeshRaw.n_logical_edges() << " arcs and "
                   << mcMeshRaw.n_logical_vertices() << " nodes";
 
-        for (auto& [preserveSingularWalls, avoidSelfadjacency] :
-             vector<pairTT<bool>>({{false, true}, {false, false}}))
+        for (auto& [preserveSingularWalls, avoidSelfadjacency] : vector<pairTT<bool>>({{false, true}, {false, false}}))
         {
             LOG(INFO) << "REDUCTION PASS: preserveSingular " << preserveSingularWalls << ", avoidSelfadj "
                       << avoidSelfadjacency;
-            reducer.init(preserveSingularWalls, avoidSelfadjacency);
+            reducer.init(preserveSingularWalls, avoidSelfadjacency, true);
             while (reducer.isReducible())
             {
-                assertPatchesReducible(true, preserveSingularWalls, avoidSelfadjacency);
+                assertPatchesReducible(true, preserveSingularWalls, avoidSelfadjacency, true);
                 reducer.removeNextPatch();
                 assertArcsReducible(false);
                 assertNodesReducible(false);
@@ -73,12 +73,12 @@ class MCReducerSuccessTest : public MCReducerTest
             assertValidWalls();
             assertTransitionFreeBlocks();
             assertValidMC();
-            assertPatchesReducible(false, preserveSingularWalls, avoidSelfadjacency);
+            assertPatchesReducible(false, preserveSingularWalls, avoidSelfadjacency, true);
         }
 
-        LOG(INFO) << "Reduced MC to " << mcMeshRaw.n_logical_cells() << " blocks, "
-                  << mcMeshRaw.n_logical_faces() << " patches, " << mcMeshRaw.n_logical_edges() << " arcs and "
-                  << mcMeshRaw.n_logical_vertices() << " nodes";
+        LOG(INFO) << "Reduced MC to " << mcMeshRaw.n_logical_cells() << " blocks, " << mcMeshRaw.n_logical_faces()
+                  << " patches, " << mcMeshRaw.n_logical_edges() << " arcs and " << mcMeshRaw.n_logical_vertices()
+                  << " nodes";
     }
 };
 
@@ -95,6 +95,4 @@ INSTANTIATE_TEST_SUITE_P(ForEachValidDequantizedModel,
                          MCReducerSuccessTest,
                          ::testing::ValuesIn(dequantizedModelNamesOut));
 
-INSTANTIATE_TEST_SUITE_P(ForEachValidAlgohexModel,
-                         MCReducerSuccessTest,
-                         ::testing::ValuesIn(algohexModelNamesOut));
+INSTANTIATE_TEST_SUITE_P(ForEachValidAlgohexModel, MCReducerSuccessTest, ::testing::ValuesIn(algohexModelNamesOut));

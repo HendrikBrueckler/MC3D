@@ -42,6 +42,186 @@ MotorcycleSpawner::RetCode MotorcycleSpawner::spawnSingularityMotorcycles()
     return SUCCESS;
 }
 
+MotorcycleSpawner::RetCode MotorcycleSpawner::spawnFeatureMotorcycles()
+{
+    const TetMesh& tetMesh = _meshPropsC.mesh;
+
+    if (!_meshProps.isAllocated<IS_FEATURE_F>())
+        _meshProps.allocate<IS_FEATURE_F>(false);
+    if (!_meshProps.isAllocated<IS_FEATURE_E>())
+        _meshProps.allocate<IS_FEATURE_E>(false);
+    if (!_meshProps.isAllocated<IS_FEATURE_V>())
+        _meshProps.allocate<IS_FEATURE_V>(false);
+
+    // Make features consistent:
+    // Mark each edge that has != 0 or != 2 feature patches as feature
+    for (auto e : tetMesh.edges())
+    {
+        if (_meshPropsC.get<IS_SINGULAR>(e) || _meshPropsC.get<IS_FEATURE_E>(e))
+            continue;
+
+        int nFeatureFaces = 0;
+        for (auto f : tetMesh.edge_faces(e))
+            if (_meshPropsC.get<IS_FEATURE_F>(f))
+                nFeatureFaces++;
+        if (nFeatureFaces != 2)
+        {
+            if (nFeatureFaces != 0)
+                _meshProps.set<IS_FEATURE_E>(e, true);
+            continue;
+        }
+
+        UVWDir normals = UVWDir::NONE;
+        auto he = tetMesh.halfedge_handle(e, 0);
+        auto hf = *tetMesh.hehf_iter(he);
+        // Workaround for bad input with isolated edges...
+        if (!hf.is_valid())
+            continue;
+
+        Transition trans;
+        auto checkNormals = [this, &tetMesh, &trans, &normals](const OVM::HalfFaceHandle& hfCurr)
+        {
+            if (_meshPropsC.get<IS_FEATURE_F>(tetMesh.face_handle(hfCurr)))
+            {
+                auto normal = axisAlignedHalfFaceNormal(hfCurr);
+                normals = normals | trans.invert().rotate(normal);
+            }
+            trans = trans.chain(_meshPropsC.hfTransition(hfCurr));
+            return false;
+        };
+
+        if (!forEachHfInHeCycle(he, hf, hf, checkNormals))
+        {
+            trans = Transition();
+            he = tetMesh.opposite_halfedge_handle(he);
+            hf = tetMesh.opposite_halfface_handle(hf);
+            forEachHfInHeCycle(he, hf, hf, checkNormals);
+        }
+
+        if (dim(normals) > 1)
+            _meshProps.set<IS_FEATURE_E>(e, true);
+    }
+
+    // Mark each vertex that has != 0 or != 2 feature edges as feature
+    for (auto v : tetMesh.vertices())
+    {
+        if (_meshPropsC.get<IS_FEATURE_V>(v))
+            continue;
+
+        int nFeatureEdges = 0;
+        for (auto e : tetMesh.vertex_edges(v))
+            if (_meshPropsC.get<IS_FEATURE_E>(e))
+                nFeatureEdges++;
+        if (nFeatureEdges != 2)
+        {
+            if (nFeatureEdges != 0)
+                _meshProps.set<IS_FEATURE_V>(v, true);
+            continue;
+        }
+
+        auto tetRef = *tetMesh.vc_iter(v);
+
+        // Workaround for bad input, that has isolated vertices...
+        if (!tetRef.is_valid())
+            continue;
+        assert(v.is_valid());
+        assert(tetRef.is_valid());
+        map<OVM::CellHandle, Transition> tet2trans({{tetRef, Transition()}});
+        // Floodfill tets around n, storing Transition for each tet
+        list<std::pair<OVM::CellHandle, Transition>> tetQ({{tetRef, Transition()}});
+
+        while (!tetQ.empty())
+        {
+            auto tet2t = tetQ.front();
+            tetQ.pop_front();
+
+            for (auto hf : tetMesh.cell_halffaces(tet2t.first))
+            {
+                auto hfOpp = tetMesh.opposite_halfface_handle(hf);
+                auto tetNext = tetMesh.incident_cell(hfOpp);
+                if (!tetNext.is_valid() || tet2trans.find(tetNext) != tet2trans.end())
+                    continue;
+                bool hasV = false;
+                for (auto v2 : tetMesh.halfface_vertices(hf))
+                    if (v2 == v)
+                    {
+                        hasV = true;
+                        break;
+                    }
+                if (!hasV)
+                    continue;
+                auto trans = tet2t.second.chain(_meshPropsC.hfTransition(hf));
+                tet2trans[tetNext] = trans;
+                tetQ.push_back({tetNext, trans});
+            }
+        }
+        UVWDir dirs = UVWDir::NONE;
+        for (auto e : tetMesh.vertex_edges(v))
+            if (_meshPropsC.get<IS_FEATURE_E>(e))
+                dirs = dirs | tet2trans.at(*tetMesh.ec_iter(e)).invert().rotate(edgeDirection(e, *tetMesh.ec_iter(e)));
+        if (dim(dirs) > 1)
+            _meshProps.set<IS_FEATURE_V>(v, true);
+    }
+
+    for (auto f : tetMesh.faces())
+    {
+        if (_meshPropsC.get<IS_FEATURE_F>(f) && !tetMesh.is_boundary(f))
+        {
+            // Sanity check
+            UVWDir halffaceNormal = axisAlignedHalfFaceNormal(tetMesh.halfface_handle(f, 0));
+            if (dim(halffaceNormal) != 1)
+            {
+                LOG(ERROR) << "Face " << f.idx() << " is feature"
+                           << " but is not const in exactly 1 coord out of U,V,W";
+                return INVALID_SINGULARITY;
+            }
+            // Get incident cell
+            auto tet = tetMesh.incident_cell(tetMesh.halfface_handle(f, 0));
+            auto e = *tetMesh.fe_iter(f);
+            spawnMotorcycle(e, tet, toCoord(halffaceNormal));
+        }
+    }
+
+    for (auto e : tetMesh.edges())
+    {
+        if (_meshPropsC.get<IS_FEATURE_E>(e))
+        {
+            for (auto tet : tetMesh.edge_cells(e))
+            {
+                // Sanity check
+                UVWDir edgeDir = edgeDirection(e, tet);
+                if (dim(edgeDir) != 1)
+                {
+                    LOG(ERROR) << "Edge " << e.idx() << " is feature"
+                               << " but is not const in exactly 2 coords out of U,V,W";
+                    return INVALID_FEATURE;
+                }
+                // For each UVW propagation direction (two are perpendicular to e and will be valid)
+                for (int wallIsoCoord = 0; wallIsoCoord < 3; wallIsoCoord++)
+                    spawnMotorcycle(e, tet, wallIsoCoord);
+            }
+        }
+    }
+
+    for (auto v : tetMesh.vertices())
+    {
+        if (_meshPropsC.get<IS_FEATURE_V>(v))
+        {
+            for (auto e : tetMesh.vertex_edges(v))
+            {
+                for (auto tet : tetMesh.edge_cells(e))
+                {
+                    // For each UVW propagation direction (two are perpendicular to e and will be valid)
+                    for (int wallIsoCoord = 0; wallIsoCoord < 3; wallIsoCoord++)
+                        spawnMotorcycle(e, tet, wallIsoCoord);
+                }
+            }
+        }
+    }
+
+    return SUCCESS;
+}
+
 MotorcycleSpawner::RetCode MotorcycleSpawner::spawnTorusSplitMotorcycle()
 {
     const TetMesh& tetMesh = _meshPropsC.mesh;
@@ -82,12 +262,12 @@ MotorcycleSpawner::RetCode MotorcycleSpawner::spawnTorusSplitMotorcycle()
             int wallIsoCoord = toCoord(data.axis);
             for (auto tet : data.tets)
             {
-                for (auto hf: tetMesh.cell_halffaces(tet))
+                for (auto hf : tetMesh.cell_halffaces(tet))
                 {
                     if (!_meshPropsC.isBlockBoundary(hf))
                         continue;
                     // Find any edge that is splittable
-                    for (auto he: tetMesh.halfface_halfedges(hf))
+                    for (auto he : tetMesh.halfface_halfedges(hf))
                     {
                         auto dir = edgeDirection(tetMesh.edge_handle(he), tet);
                         if ((he.idx() % 2) != 0)
@@ -98,15 +278,16 @@ MotorcycleSpawner::RetCode MotorcycleSpawner::spawnTorusSplitMotorcycle()
                         auto vs = tetMesh.halfedge_vertices(he);
                         vs.emplace_back(tetMesh.to_vertex_handle(tetMesh.next_halfedge_in_halfface(he, hf)));
                         vector<Vec3Q> uvws;
-                        for (auto v: vs)
+                        for (auto v : vs)
                             uvws.emplace_back(_meshPropsC.get<CHART>(tet).at(v));
-                        Q t = (uvws[2][wallIsoCoord] - uvws[0][wallIsoCoord]) / (uvws[1][wallIsoCoord] - uvws[0][wallIsoCoord]);
+                        Q t = (uvws[2][wallIsoCoord] - uvws[0][wallIsoCoord])
+                              / (uvws[1][wallIsoCoord] - uvws[0][wallIsoCoord]);
                         if (t <= 0 || t >= 1)
                             continue;
                         // edge is splittable
                         auto vNew = splitHalfEdge(he, tet, t);
                         auto eSplit = tetMesh.edge_handle(tetMesh.halfedge(vNew, vs[2]));
-                        for (auto tetSplit: tetMesh.edge_cells(eSplit))
+                        for (auto tetSplit : tetMesh.edge_cells(eSplit))
                         {
                             // In same block?
                             bool sameBlock = _meshPropsC.get<MC_BLOCK_ID>(tetSplit) == data.id;
@@ -164,12 +345,12 @@ MotorcycleSpawner::RetCode MotorcycleSpawner::spawnSelfadjacencySplitMotorcycle(
         if (data.selfadjacent)
         {
             int wallIsoCoord = toCoord(data.axis);
-            for (auto hf: tetMesh.cell_halffaces(tet))
+            for (auto hf : tetMesh.cell_halffaces(tet))
             {
                 if (!_meshPropsC.isBlockBoundary(hf) || dim(data.axis | axisAlignedHalfFaceNormal(hf)) == 1)
                     continue;
                 // Find any edge that is splittable
-                for (auto he: tetMesh.halfface_halfedges(hf))
+                for (auto he : tetMesh.halfface_halfedges(hf))
                 {
                     auto dir = edgeDirection(tetMesh.edge_handle(he), tet);
                     if ((he.idx() % 2) != 0)
@@ -181,16 +362,17 @@ MotorcycleSpawner::RetCode MotorcycleSpawner::spawnSelfadjacencySplitMotorcycle(
                     auto vs = tetMesh.halfedge_vertices(he);
                     vs.emplace_back(tetMesh.to_vertex_handle(tetMesh.next_halfedge_in_halfface(he, hf)));
                     vector<Vec3Q> uvws;
-                    for (auto v: vs)
+                    for (auto v : vs)
                         uvws.emplace_back(_meshPropsC.get<CHART>(tet).at(v));
-                    Q t = (uvws[2][wallIsoCoord] - uvws[0][wallIsoCoord]) / (uvws[1][wallIsoCoord] - uvws[0][wallIsoCoord]);
+                    Q t = (uvws[2][wallIsoCoord] - uvws[0][wallIsoCoord])
+                          / (uvws[1][wallIsoCoord] - uvws[0][wallIsoCoord]);
                     if (t <= 0 || t >= 1)
                         continue;
 
                     // edge is splittable
                     auto vNew = splitHalfEdge(he, tet, t);
                     auto eSplit = tetMesh.edge_handle(tetMesh.halfedge(vNew, vs[2]));
-                    for (auto tetSplit: tetMesh.edge_cells(eSplit))
+                    for (auto tetSplit : tetMesh.edge_cells(eSplit))
                     {
                         if (dim(edgeDirection(eSplit, tetSplit)) != 1)
                             throw std::logic_error("Created aligned edge is not aligned");

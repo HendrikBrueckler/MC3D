@@ -20,11 +20,14 @@ MC3D_PROPERTY(BLOCK_MESH_TETS,      Cell,     set<OVM::CellHandle>);
 MC3D_PROPERTY(PATCH_TRANSITION,     Face,     Transition);
 MC3D_PROPERTY(PATCH_MIN_DIST,       Face,     float);
 MC3D_PROPERTY(PATCH_MESH_HALFFACES, Face,     set<OVM::HalfFaceHandle>);
-MC3D_PROPERTY(ARC_IS_SINGULAR,      Edge,     bool);
 MC3D_PROPERTY(ARC_MESH_HALFEDGES,   Edge,     list<OVM::HalfEdgeHandle>);
 MC3D_PROPERTY(ARC_INT_LENGTH,       Edge,     int);
 MC3D_PROPERTY(ARC_DBL_LENGTH,       Edge,     double);
 MC3D_PROPERTY(NODE_MESH_VERTEX,     Vertex,   OVM::VertexHandle);
+MC3D_PROPERTY(IS_SINGULAR,          Edge,     bool);
+MC3D_PROPERTY(IS_FEATURE_V,         Vertex,   bool);
+MC3D_PROPERTY(IS_FEATURE_E,         Edge,     bool);
+MC3D_PROPERTY(IS_FEATURE_F,         Face,     bool);
 
 // Mapped
 MC3D_MAP_PROPERTY(CHILD_CELLS,      Cell,     vector<OVM::CellHandle>);
@@ -52,7 +55,10 @@ using MCMeshPropsBase = MeshPropsInterface<MCMesh,
                                            PATCH_MIN_DIST,
                                            BLOCK_MESH_TETS,
                                            PATCH_MESH_HALFFACES,
-                                           ARC_IS_SINGULAR,
+                                           IS_SINGULAR,
+                                           IS_FEATURE_E,
+                                           IS_FEATURE_V,
+                                           IS_FEATURE_F,
                                            ARC_INT_LENGTH,
                                            ARC_DBL_LENGTH,
                                            ARC_MESH_HALFEDGES,

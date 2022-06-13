@@ -20,6 +20,7 @@ class MotorcycleSpawner : public virtual TetMeshManipulator
         SUCCESS = 0,
         INVALID_SINGULARITY = 8,
         UNSPLITTABLE_BLOCK = 18,
+        INVALID_FEATURE = 23
     };
 
     /**
@@ -38,6 +39,16 @@ class MotorcycleSpawner : public virtual TetMeshManipulator
      * @return RetCode SUCCESS or INVALID_SINGULARITY
      */
     RetCode spawnSingularityMotorcycles();
+
+
+    /**
+     * @brief Insert motorcycles for each [singular-edge, expansion-direction] pair
+     *
+     * Requires props: IS_FEATURE_E, IS_FEATURE_V, IS_FEATURE_F, CHART, TRANSITION
+     *
+     * @return RetCode SUCCESS or INVALID_SINGULARITY
+     */
+    RetCode spawnFeatureMotorcycles();
 
     /**
      * @brief Insert a single motorcycle into the queue that when fully traced splits a toroidal block.

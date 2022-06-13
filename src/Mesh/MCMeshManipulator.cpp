@@ -262,8 +262,7 @@ OVM::EdgeHandle MCMeshManipulator::mergeArcs(const OVM::EdgeHandle& a1,
     _mcMeshProps.cloneAll(a1, a);
     _mcMeshProps.cloneAll(has1[0], flipArcDir1 ? hasChild[1] : hasChild[0]);
     _mcMeshProps.cloneAll(has1[1], flipArcDir1 ? hasChild[0] : hasChild[1]);
-    _mcMeshProps.set<ARC_IS_SINGULAR>(a,
-                                      _mcMeshProps.get<ARC_IS_SINGULAR>(a1) || _mcMeshProps.get<ARC_IS_SINGULAR>(a2));
+    _mcMeshProps.set<IS_SINGULAR>(a, _mcMeshProps.get<IS_SINGULAR>(a1) || _mcMeshProps.get<IS_SINGULAR>(a2));
     if (_mcMeshProps.isAllocated<ARC_INT_LENGTH>())
         _mcMeshProps.set<ARC_INT_LENGTH>(a,
                                          _mcMeshProps.get<ARC_INT_LENGTH>(a1) + _mcMeshProps.get<ARC_INT_LENGTH>(a2));
