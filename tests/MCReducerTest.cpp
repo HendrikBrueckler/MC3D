@@ -48,7 +48,7 @@ class MCReducerSuccessTest : public MCReducerTest
                 {
                     reducer.init(preserveSingularWalls, avoidSelfadjacency, preserveFeatures);
                     bool isReducible = reducer.isReducible();
-                    assertPatchesReducible(isReducible, preserveSingularWalls, avoidSelfadjacency);
+                    assertPatchesReducible(isReducible, preserveSingularWalls, avoidSelfadjacency, preserveFeatures);
                     assertArcsReducible(false);
                     assertNodesReducible(false);
                 }
