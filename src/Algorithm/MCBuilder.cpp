@@ -343,11 +343,7 @@ MCBuilder::RetCode MCBuilder::createAndMapNodes()
             _isNode[v.idx()] = true;
             auto n = mcMesh.add_vertex(tetMesh.vertex(v));
             if (_meshProps.isAllocated<IS_FEATURE_V>() && mcMeshProps.isAllocated<IS_FEATURE_V>())
-            {
-                if (_meshProps.get<IS_FEATURE_V>(v))
-                    std::cout << "Set feature node " << n << " from " << v << std::endl;
                 mcMeshProps.set<IS_FEATURE_V>(n, _meshProps.get<IS_FEATURE_V>(v));
-            }
             _meshProps.set<MC_NODE>(v, n);
             mcMeshProps.set<NODE_MESH_VERTEX>(n, v);
         }
