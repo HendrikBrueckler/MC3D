@@ -2,7 +2,6 @@ option(MC3D_SUBMODULES_MANUAL "Download MC3D submodules manually" OFF)
 
 find_package(Git QUIET)
 
-set(OVM_PATCH_TIMESTAMP "${CMAKE_CURRENT_SOURCE_DIR}/OpenVolumeMesh/ovmpatch.stamp")
 if(NOT ${MC3D_SUBMODULES_MANUAL})
     if(GIT_FOUND AND EXISTS "${CMAKE_SOURCE_DIR}/.git")
         git_update_submodules("${CMAKE_CURRENT_SOURCE_DIR}")
