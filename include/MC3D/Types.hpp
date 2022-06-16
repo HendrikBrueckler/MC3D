@@ -1,7 +1,7 @@
 #ifndef MC3D_TYPES_HPP
 #define MC3D_TYPES_HPP
 
-#include <OpenVolumeMesh/Core/PropertyDefines.hh>
+#include <OpenVolumeMesh/Core/Properties/PropertyPtr.hh>
 #include <OpenVolumeMesh/Geometry/VectorT.hh>
 #include <OpenVolumeMesh/Mesh/PolyhedralMesh.hh>
 #include <OpenVolumeMesh/Mesh/TetrahedralGeometryKernel.hh>

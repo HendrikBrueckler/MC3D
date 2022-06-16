@@ -19,7 +19,7 @@
         using entity_t = OVM::Entity::OVM_ENTITY_T;                                                                    \
         using value_t = VALUE_T;                                                                                       \
         using handle_t = OVM::HandleT<entity_t>;                                                                       \
-        using prop_t = OVM::PropertyTT<value_t, entity_t>;                                                             \
+        using prop_t = OVM::PropertyPtr<value_t, entity_t>;                                                             \
         using ref_t = vector<value_t>::reference;                                                                      \
         using const_ref_t = vector<value_t>::const_reference;                                                          \
         const static bool IS_MAPPED = false;                                                                           \
@@ -676,7 +676,7 @@ class MeshPropsInterface
         ptr = std::unique_ptr<typename Prop::prop_t>(
             new typename Prop::prop_t(mesh.template request_property<typename Prop::value_t, typename Prop::entity_t>(
                 Prop::name() + std::to_string(id), def)));
-        (*ptr)->set_persistent(true);
+        mesh.set_persistent(*ptr);
         return *ptr;
     }
 
@@ -702,7 +702,7 @@ class MeshPropsInterface
     {
         static_assert(is_any_of<Prop, Props...>::value, "NO SUCH PROPERTY MANAGED BY THIS CLASS");
         assert(propIsAllocated<Prop>(ptr));
-        (*ptr)->set_persistent(false);
+        mesh.set_persistent(*ptr, false);
         for (auto it = ptr->begin(); it != ptr->end(); it++)
             *it = def;
         ptr.reset();

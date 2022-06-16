@@ -790,12 +790,15 @@ vector<OVM::CellHandle> MCMeshManipulator::splitBlockTopologically(const OVM::Ce
         nHps++;
     }
     assert(bsChildHps[0].size() + bsChildHps[1].size() == nHps + 2);
-    auto bNew1 = mcMesh.add_cell(bsChildHps[0], true);
-    auto bNew2 = mcMesh.add_cell(bsChildHps[1], true);
-#else
+#endif
+
+// #ifndef NDEBUG
+//     auto bNew1 = mcMesh.add_cell(bsChildHps[0], true);
+//     auto bNew2 = mcMesh.add_cell(bsChildHps[1], true);
+// #else
     auto bNew1 = mcMesh.add_cell(bsChildHps[0]);
     auto bNew2 = mcMesh.add_cell(bsChildHps[1]);
-#endif
+// #endif
     assert(bNew1.is_valid());
     assert(bNew2.is_valid());
 
@@ -970,11 +973,11 @@ OVM::CellHandle MCMeshManipulator::mergeBlocksTopologically(const OVM::CellHandl
     deferredDeleteBlock(b1);
     deferredDeleteBlock(b2);
 
-#ifndef NDEBUG
-    auto b = mcMesh.add_cell(bhps, true);
-#else
+// #ifndef NDEBUG
+//     auto b = mcMesh.add_cell(bhps, true);
+// #else
     auto b = mcMesh.add_cell(bhps);
-#endif
+// #endif
     assert(b.is_valid());
 
     return b;

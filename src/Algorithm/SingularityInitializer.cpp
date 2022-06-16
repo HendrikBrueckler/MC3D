@@ -91,7 +91,7 @@ bool SingularityInitializer::allSingularitiesValid() const
             for (OVM::CellHandle c : tetMesh.edge_cells(e))
             {
                 const auto& chart = _meshPropsC.ref<CHART>(*tetMesh.ec_iter(e));
-                vector<OVM::VertexHandle> vs = tetMesh.edge_vertices(e);
+                auto vs = tetMesh.edge_vertices(e);
                 int equalCoords = 0;
                 for (int i = 0; i < 3; i++)
                 {

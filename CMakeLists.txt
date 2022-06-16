@@ -2,8 +2,9 @@ cmake_minimum_required(VERSION 3.10)
 
 project(MC3D VERSION 1.0)
 
-### Default to C++11, CLI and tests need C++17, however
-set(CMAKE_CXX_STANDARD 11)
+### Default to C++17
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 ### Require out-of-source builds
 file(TO_CMAKE_PATH "${PROJECT_BINARY_DIR}/CMakeLists.txt" LOC_PATH)

@@ -60,7 +60,7 @@ list(APPEND ${MC3D_LIB_NAME}_LIB_LIST trulyseamless3d)
 target_link_libraries_system(${MC3D_LIB_NAME} PUBLIC ${${MC3D_LIB_NAME}_LIB_LIST})
 
 ### Set compile options
-set_target_properties(${MC3D_LIB_NAME} PROPERTIES CXX_STANDARD 11 CXX_STANDARD_REQUIRED ON)
+set_target_properties(${MC3D_LIB_NAME} PROPERTIES CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON)
 target_compile_options(${MC3D_LIB_NAME} PRIVATE ${${MC3D_LIB_NAME}_COMPILE_OPTIONS})
 target_compile_definitions(${MC3D_LIB_NAME} PRIVATE ${${MC3D_LIB_NAME}_COMPILE_DEFINITIONS})
 

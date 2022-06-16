@@ -275,7 +275,8 @@ MotorcycleSpawner::RetCode MotorcycleSpawner::spawnTorusSplitMotorcycle()
                         if (dim(data.axis & dir) != 1)
                             continue;
                         // Edge is correctly aligned
-                        auto vs = tetMesh.halfedge_vertices(he);
+                        auto vsArray = tetMesh.halfedge_vertices(he);
+                        vector<OVM::VertexHandle> vs(vsArray.begin(), vsArray.end());
                         vs.emplace_back(tetMesh.to_vertex_handle(tetMesh.next_halfedge_in_halfface(he, hf)));
                         vector<Vec3Q> uvws;
                         for (auto v : vs)
@@ -359,7 +360,8 @@ MotorcycleSpawner::RetCode MotorcycleSpawner::spawnSelfadjacencySplitMotorcycle(
                         continue;
 
                     // Edge is correctly aligned
-                    auto vs = tetMesh.halfedge_vertices(he);
+                    auto vsArray = tetMesh.halfedge_vertices(he);
+                    vector<OVM::VertexHandle> vs(vsArray.begin(), vsArray.end());
                     vs.emplace_back(tetMesh.to_vertex_handle(tetMesh.next_halfedge_in_halfface(he, hf)));
                     vector<Vec3Q> uvws;
                     for (auto v : vs)
@@ -408,7 +410,7 @@ bool MotorcycleSpawner::spawnMotorcycle(const OVM::EdgeHandle& e, const OVM::Cel
             wallPropagationCoord = i;
 
     const auto& chart = _meshPropsC.ref<CHART>(tet);
-    vector<OVM::VertexHandle> evs = _meshPropsC.mesh.edge_vertices(e);
+    auto evs = _meshPropsC.mesh.edge_vertices(e);
 
     // Encode propagation direction and plane iso direction
     Vec3i directions(0, 0, 0);

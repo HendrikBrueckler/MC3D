@@ -301,7 +301,7 @@ Q TetMeshNavigator::getDirectDistToOrigin(const Motorcycle& mot) const
 {
     int wallPropagationCoord = mot.propagationCoord();
 
-    vector<OVM::VertexHandle> evs = _meshPropsC.mesh.edge_vertices(mot.edge);
+    auto evs = _meshPropsC.mesh.edge_vertices(mot.edge);
     OVM::VertexHandle vB(evs[0]), vC(evs[1]);
     // Get nearest of (B, C) distance to motorcycle origin to increment travelled distance later
     Q diffB = abs(_meshPropsC.get<CHART>(mot.tet).at(vB)[wallPropagationCoord] - mot.startValue);

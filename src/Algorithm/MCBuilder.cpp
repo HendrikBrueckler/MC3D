@@ -642,11 +642,11 @@ MCBuilder::RetCode MCBuilder::createAndMapBlocks()
                                      }
                                      return false;
                                  });
-#ifndef NDEBUG
-        auto block = mcMesh.add_cell({blockHalfpatches.begin(), blockHalfpatches.end()}, true);
-#else
+// #ifndef NDEBUG
+//         auto block = mcMesh.add_cell({blockHalfpatches.begin(), blockHalfpatches.end()}, true);
+// #else
         auto block = mcMesh.add_cell({blockHalfpatches.begin(), blockHalfpatches.end()});
-#endif
+// #endif
         assert(block.is_valid());
         mcMeshProps.set<BLOCK_MESH_TETS>(block, data.tets);
         assert(!data.tets.empty());
