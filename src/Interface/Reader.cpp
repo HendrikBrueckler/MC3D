@@ -199,7 +199,7 @@ Reader::RetCode Reader::readTetsAndCharts()
             TS3D::TrulySeamless3D sanitizer(tetMesh);
             for (auto tet: tetMesh.cells())
                 for (auto v: tetMesh.tet_vertices(tet))
-                    sanitizer.parameter(tet, v) = Vec3Q2d(_meshProps.ref<CHART>(tet).at(v));
+                    sanitizer.setParam(tet, v, Vec3Q2d(_meshProps.ref<CHART>(tet).at(v)));
             if (!sanitizer.init() || !sanitizer.sanitize(0.0, true))
             {
                 LOG(ERROR) << "Sanitization failed";
@@ -207,7 +207,7 @@ Reader::RetCode Reader::readTetsAndCharts()
             }
             for (auto tet: tetMesh.cells())
                 for (auto v: tetMesh.tet_vertices(tet))
-                    _meshProps.ref<CHART>(tet).at(v) = sanitizer.parameter(tet, v);
+                    _meshProps.ref<CHART>(tet).at(v) = sanitizer.getParam(tet, v);
         }
         catch (std::runtime_error& e)
         {
