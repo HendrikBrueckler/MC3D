@@ -87,7 +87,7 @@ void TetMeshNavigator::forEachFloodedHalfFaceInPatch(
             if (_meshPropsC.get<MC_ARC>(_meshPropsC.mesh.edge_handle(he)).is_valid())
                 continue;
 
-            auto adjHf = adjacentHfInBlock(hf, he);
+            auto adjHf = adjacentHfOnWall(hf, he);
             if (!hfVisited[adjHf.idx()])
             {
                 hfVisited[adjHf.idx()] = true;
@@ -155,10 +155,15 @@ void TetMeshNavigator::forVertexNeighbourHalffacesInBlock(
     });
 }
 
-OVM::HalfFaceHandle TetMeshNavigator::adjacentHfInBlock(const OVM::HalfFaceHandle& hfCurrent,
+OVM::HalfFaceHandle TetMeshNavigator::adjacentHfOnWall(const OVM::HalfFaceHandle& hfCurrent,
                                                      const OVM::HalfEdgeHandle& hePivot) const
 {
     assert(_meshPropsC.isBlockBoundary(hfCurrent));
+    if (_meshPropsC.mesh.is_boundary(hfCurrent))
+        for (auto adjHf: _meshPropsC.mesh.edge_halffaces(_meshPropsC.mesh.edge_handle(hePivot)))
+            if (_meshPropsC.mesh.is_boundary(adjHf) && adjHf != hfCurrent)
+                return adjHf;
+
     auto hfStart = _meshPropsC.mesh.adjacent_halfface_in_cell(hfCurrent, hePivot);
     auto adjHf = OVM::HalfFaceHandle(-1);
     forEachHfInHeCycle(_meshPropsC.mesh.opposite_halfedge_handle(hePivot),

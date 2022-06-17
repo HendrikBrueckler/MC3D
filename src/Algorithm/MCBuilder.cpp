@@ -176,7 +176,7 @@ MCBuilder::gatherBlockData(const OVM::CellHandle& tetStart, vector<bool>& tetVis
                     if (visitedTetEdges.find({tet, e}) != visitedTetEdges.end())
                         continue;
 
-                    auto adjHf = adjacentHfInBlock(hf, he);
+                    auto adjHf = adjacentHfOnWall(hf, he);
                     visitedTetEdges.insert({tet, e});
                     visitedTetEdges.insert({tetMesh.incident_cell(adjHf), e});
 
@@ -478,7 +478,7 @@ MCBuilder::RetCode MCBuilder::createAndMapPatches()
 
     for (auto hfStart : tetMesh.halffaces())
     {
-        if (hfVisited[hfStart.idx()] || !_meshProps.isBlockBoundary(hfStart))
+        if (tetMesh.is_boundary(hfStart) || hfVisited[hfStart.idx()] || !_meshProps.isBlockBoundary(hfStart))
             continue;
 
         bool annular = false;
@@ -556,11 +556,11 @@ MCBuilder::RetCode MCBuilder::createAndMapPatches()
                 int nFeatureFaces = 0;
                 int nNonFeatureFaces = 0;
                 for (auto hf : patchHfs)
-                        if (_meshProps.get<IS_FEATURE_F>(tetMesh.face_handle(hf)))
-                            nFeatureFaces++;
-                        else
-                            nNonFeatureFaces++;
-                    assert(nFeatureFaces == 0 || nNonFeatureFaces == 0);
+                    if (_meshProps.get<IS_FEATURE_F>(tetMesh.face_handle(hf)))
+                        nFeatureFaces++;
+                    else
+                        nNonFeatureFaces++;
+                assert(nFeatureFaces == 0 || nNonFeatureFaces == 0);
                 assert(nFeatureFaces == 0 || nNonFeatureFaces == 0);
                 mcMeshProps.set<IS_FEATURE_F>(patch, nFeatureFaces != 0);
             }
@@ -642,11 +642,11 @@ MCBuilder::RetCode MCBuilder::createAndMapBlocks()
                                      }
                                      return false;
                                  });
-// #ifndef NDEBUG
-//         auto block = mcMesh.add_cell({blockHalfpatches.begin(), blockHalfpatches.end()}, true);
-// #else
+        // #ifndef NDEBUG
+        //         auto block = mcMesh.add_cell({blockHalfpatches.begin(), blockHalfpatches.end()}, true);
+        // #else
         auto block = mcMesh.add_cell({blockHalfpatches.begin(), blockHalfpatches.end()});
-// #endif
+        // #endif
         assert(block.is_valid());
         mcMeshProps.set<BLOCK_MESH_TETS>(block, data.tets);
         assert(!data.tets.empty());

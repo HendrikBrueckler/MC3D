@@ -144,7 +144,7 @@ class TetMeshNavigator
      * @param hePivot IN: halfedge to circulate around
      * @return OVM::HalfFaceHandle halfface incident on \p hePivot and on the same inner block boundary as \p hfCurrent
      */
-    OVM::HalfFaceHandle adjacentHfInBlock(const OVM::HalfFaceHandle& hfCurrent,
+    OVM::HalfFaceHandle adjacentHfOnWall(const OVM::HalfFaceHandle& hfCurrent,
                                           const OVM::HalfEdgeHandle& hePivot) const;
 
     /**
