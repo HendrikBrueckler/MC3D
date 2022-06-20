@@ -425,9 +425,10 @@ bool TetMeshNavigator::barycentricCoords2D(const OVM::HalfFaceHandle& hf,
     for (int corner = 0; corner < 2; corner++)
     {
         int edge = (corner + 1) % 3;
-        assert((cornerUVW[corner][coord1] - cornerUVW[edge][coord1]) * edgeVecs[edge][coord3]
+        if ((cornerUVW[corner][coord1] - cornerUVW[edge][coord1]) * edgeVecs[edge][coord3]
                    - (cornerUVW[corner][coord3] - cornerUVW[edge][coord3]) * edgeVecs[edge][coord1]
-               != 0);
+            == 0)
+            return false;
         barCoords[corner] = ((UVW[coord1] - cornerUVW[edge][coord1]) * edgeVecs[edge][coord3]
                              - (UVW[coord3] - cornerUVW[edge][coord3]) * edgeVecs[edge][coord1])
                             / ((cornerUVW[corner][coord1] - cornerUVW[edge][coord1]) * edgeVecs[edge][coord3]

@@ -289,6 +289,8 @@ MotorcycleSpawner::RetCode MotorcycleSpawner::spawnFeatureMotorcycles()
                         Vec3Q barCoords;
                         if (barycentricCoords2D(hfOpp, _meshPropsC.ref<CHART>(tet).at(v), constCoord, barCoords))
                         {
+                            if (barCoords[0] == 0 || barCoords[1] == 0 || barCoords[2] == 0)
+                                continue;
                             splitFace(tetMesh.face_handle(hfOpp), barCoords);
                             change = true;
                             break;
