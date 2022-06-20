@@ -207,6 +207,98 @@ MotorcycleSpawner::RetCode MotorcycleSpawner::spawnFeatureMotorcycles()
     {
         if (_meshPropsC.get<IS_FEATURE_V>(v))
         {
+            // TODO first create all the possible axis-aligned edges
+            // for each face incident on v:
+            //      if face normal is axis aligned
+            //          if vtx. coord lies between opp halfedge
+            //              split opp halfedge to create axis-aligned edge
+            bool change = true;
+            while (change)
+            {
+                change = false;
+                for (auto f : tetMesh.vertex_faces(v))
+                {
+                    auto hf = tetMesh.halfface_handle(f, 0);
+                    if (tetMesh.is_boundary(hf))
+                        hf = tetMesh.opposite_halfface_handle(hf);
+                    auto tet = tetMesh.incident_cell(hf);
+                    auto heOpp = OVM::HalfEdgeHandle(-1);
+                    for (auto he : tetMesh.halfface_halfedges(hf))
+                        if (tetMesh.to_vertex_handle(he) == v)
+                        {
+                            heOpp = tetMesh.next_halfedge_in_halfface(he, hf);
+                            break;
+                        }
+                    auto p1 = _meshPropsC.ref<CHART>(tet).at(v);
+                    auto p2 = _meshPropsC.ref<CHART>(tet).at(tetMesh.from_vertex_handle(heOpp));
+                    auto p3 = _meshPropsC.ref<CHART>(tet).at(tetMesh.to_vertex_handle(heOpp));
+
+                    int normalCoord = -1;
+                    for (int coord = 0; coord < 3; coord++)
+                        if (p1[coord] == p2[coord] && p2[coord] == p3[coord])
+                        {
+                            normalCoord = coord;
+                            break;
+                        }
+                    if (normalCoord == -1)
+                        continue;
+                    for (int coord = 0; coord < 3; coord++)
+                    {
+                        if (coord == normalCoord)
+                            continue;
+
+                        Q delta2 = p2[coord] - p1[coord];
+                        Q delta3 = p3[coord] - p1[coord];
+                        if (delta2 * delta3 >= 0)
+                            continue;
+
+                        Q t = delta2 / (p2[coord] - p3[coord]);
+
+                        splitHalfEdge(heOpp, tet, t);
+                        change = true;
+                        break;
+                    }
+                    if (change)
+                        break;
+                }
+            }
+            // TODO first create all the possible axis-aligned edges
+            // for each tet incident on v:
+            //      for each opposite halfface of tet on v
+            //          for each coordinate:
+            //              assume coordinate as common between v and hf
+            //              if barycentric coordinates of v with respect to hf (in common plane) are "inside":
+            //                  splitHalfface(tet, hf, barcoords)
+            change = true;
+            while (change)
+            {
+                change = false;
+                for (auto tet : tetMesh.vertex_cells(v))
+                {
+                    auto hfOpp = OVM::HalfFaceHandle();
+                    for (auto hf : tetMesh.cell_halffaces(tet))
+                        if (tetMesh.halfface_opposite_vertex(hf) == v)
+                        {
+                            hfOpp = hf;
+                            break;
+                        }
+                    auto vs = tetMesh.halfface_vertices(
+                        (hfOpp.idx() % 2) == 0 ? hfOpp : tetMesh.opposite_halfface_handle(hfOpp));
+                    for (int constCoord = 0; constCoord < 3; constCoord++)
+                    {
+                        Vec3Q barCoords;
+                        if (barycentricCoords2D(hfOpp, _meshPropsC.ref<CHART>(tet).at(v), constCoord, barCoords))
+                        {
+                            splitFace(tetMesh.face_handle(hfOpp), barCoords);
+                            change = true;
+                            break;
+                        }
+                    }
+                    if (change)
+                        break;
+                }
+            }
+
             for (auto e : tetMesh.vertex_edges(v))
             {
                 for (auto tet : tetMesh.edge_cells(e))

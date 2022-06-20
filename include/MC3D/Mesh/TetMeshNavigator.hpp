@@ -245,6 +245,21 @@ class TetMeshNavigator
      * @return double length of \p e in parametric space
      */
     double edgeLengthUVW(const OVM::EdgeHandle& e) const;
+
+    /**
+     * @brief Determine the barycentric coordinates of \p UVW wrt \p hf assuming that \p constCoord is
+     *        identical for all vertices.
+     *
+     * @param hf IN: triangle wrt which the barycentric coordinates are to be determined
+     * @param UVW IN: igm of the point for which to determine barycentric coordinates
+     * @param constCoord IN: ignored coordinate
+     * @param barCoords OUT: barycentric coordinates of \p UVW wrt \p hf (length of 3 if inside, else empty)
+     * @return true if inside
+     * @return false else
+     */
+    bool barycentricCoords2D(
+        const OVM::HalfFaceHandle& hf, const Vec3Q& UVW, int constCoord, Vec3Q& barCoords) const;
+
   protected:
     const TetMeshProps& _meshPropsC;
 };

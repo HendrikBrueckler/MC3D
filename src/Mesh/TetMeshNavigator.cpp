@@ -8,9 +8,9 @@ TetMeshNavigator::TetMeshNavigator(const TetMeshProps& meshProps) : _meshPropsC(
 }
 
 bool TetMeshNavigator::forEachHfInHeCycle(const OVM::HalfEdgeHandle& hePivot,
-                                       const OVM::HalfFaceHandle& hfStart,
-                                       const OVM::HalfFaceHandle& hfStop,
-                                       std::function<bool(const OVM::HalfFaceHandle&)>&& breakAfterFunc) const
+                                          const OVM::HalfFaceHandle& hfStart,
+                                          const OVM::HalfFaceHandle& hfStop,
+                                          std::function<bool(const OVM::HalfFaceHandle&)>&& breakAfterFunc) const
 {
 #ifndef NDEBUG
     bool found = false;
@@ -34,8 +34,8 @@ bool TetMeshNavigator::forEachHfInHeCycle(const OVM::HalfEdgeHandle& hePivot,
 }
 
 void TetMeshNavigator::forEachFloodedTetInBlock(const OVM::CellHandle& tetStart,
-                                             vector<bool>& tetVisited,
-                                             std::function<bool(const OVM::CellHandle&)>&& breakAfterFunc) const
+                                                vector<bool>& tetVisited,
+                                                std::function<bool(const OVM::CellHandle&)>&& breakAfterFunc) const
 {
     assert(tetVisited.size() == _meshPropsC.mesh.n_cells());
     list<OVM::CellHandle> tetStack({tetStart});
@@ -98,8 +98,8 @@ void TetMeshNavigator::forEachFloodedHalfFaceInPatch(
 }
 
 void TetMeshNavigator::forVertexNeighbourTetsInBlock(const OVM::VertexHandle& v,
-                                                  const OVM::CellHandle& tetStart,
-                                                  std::function<bool(const OVM::CellHandle&)>&& breakAfterFunc) const
+                                                     const OVM::CellHandle& tetStart,
+                                                     std::function<bool(const OVM::CellHandle&)>&& breakAfterFunc) const
 {
     set<OVM::CellHandle> visitedTets;
     list<OVM::CellHandle> tetStack({tetStart});
@@ -138,29 +138,32 @@ void TetMeshNavigator::forVertexNeighbourHalffacesInBlock(
     const OVM::CellHandle& tetStart,
     std::function<bool(const OVM::HalfFaceHandle&)>&& breakAfterFunc) const
 {
-    forVertexNeighbourTetsInBlock(v, tetStart, [this, &v, &breakAfterFunc](const OVM::CellHandle& tet) {
-        for (auto hf : _meshPropsC.mesh.cell_halffaces(tet))
-        {
-            bool vTouched = false;
-            for (auto vHf : _meshPropsC.mesh.halfface_vertices(hf))
-                if (vHf == v)
-                    vTouched = true;
-            if (!vTouched)
-                continue;
+    forVertexNeighbourTetsInBlock(v,
+                                  tetStart,
+                                  [this, &v, &breakAfterFunc](const OVM::CellHandle& tet)
+                                  {
+                                      for (auto hf : _meshPropsC.mesh.cell_halffaces(tet))
+                                      {
+                                          bool vTouched = false;
+                                          for (auto vHf : _meshPropsC.mesh.halfface_vertices(hf))
+                                              if (vHf == v)
+                                                  vTouched = true;
+                                          if (!vTouched)
+                                              continue;
 
-            if (breakAfterFunc(hf))
-                return true;
-        }
-        return false;
-    });
+                                          if (breakAfterFunc(hf))
+                                              return true;
+                                      }
+                                      return false;
+                                  });
 }
 
 OVM::HalfFaceHandle TetMeshNavigator::adjacentHfOnWall(const OVM::HalfFaceHandle& hfCurrent,
-                                                     const OVM::HalfEdgeHandle& hePivot) const
+                                                       const OVM::HalfEdgeHandle& hePivot) const
 {
     assert(_meshPropsC.isBlockBoundary(hfCurrent));
     if (_meshPropsC.mesh.is_boundary(hfCurrent))
-        for (auto adjHf: _meshPropsC.mesh.edge_halffaces(_meshPropsC.mesh.edge_handle(hePivot)))
+        for (auto adjHf : _meshPropsC.mesh.edge_halffaces(_meshPropsC.mesh.edge_handle(hePivot)))
             if (_meshPropsC.mesh.is_boundary(adjHf) && adjHf != hfCurrent)
                 return adjHf;
 
@@ -169,7 +172,8 @@ OVM::HalfFaceHandle TetMeshNavigator::adjacentHfOnWall(const OVM::HalfFaceHandle
     forEachHfInHeCycle(_meshPropsC.mesh.opposite_halfedge_handle(hePivot),
                        hfStart,
                        hfStart,
-                       [this, &adjHf](const OVM::HalfFaceHandle hf2) {
+                       [this, &adjHf](const OVM::HalfFaceHandle hf2)
+                       {
                            if (_meshPropsC.isBlockBoundary(hf2))
                            {
                                adjHf = hf2;
@@ -392,7 +396,53 @@ double TetMeshNavigator::edgeLengthUVW(const OVM::EdgeHandle& e) const
     Vec3d uvw1 = Vec3Q2d(_meshPropsC.ref<CHART>(tet).at(_meshPropsC.mesh.from_vertex_handle(he)));
     Vec3d uvw2 = Vec3Q2d(_meshPropsC.ref<CHART>(tet).at(_meshPropsC.mesh.to_vertex_handle(he)));
 
-    return (uvw1-uvw2).length();
+    return (uvw1 - uvw2).length();
+}
+
+bool TetMeshNavigator::barycentricCoords2D(const OVM::HalfFaceHandle& hf,
+                                           const Vec3Q& UVW,
+                                           int constCoord,
+                                           Vec3Q& barCoords) const
+{
+    const TetMesh& tetMesh = _meshPropsC.mesh;
+
+    auto tet = tetMesh.incident_cell(hf);
+    auto vs = tetMesh.get_halfface_vertices(hf);
+
+    int coord1 = (constCoord + 1) % 3;
+    int coord3 = (constCoord + 2) % 3;
+
+    vector<Vec3Q> cornerUVW;
+    vector<Vec3Q> edgeVecs;
+    for (int corner = 0; corner < 3; corner++)
+    {
+        const auto& UVWfrom = _meshPropsC.ref<CHART>(tet).at(vs[corner]);
+        const auto& UVWto = _meshPropsC.ref<CHART>(tet).at(vs[(corner + 1) % 3]);
+        cornerUVW.emplace_back(UVWfrom);
+        edgeVecs.emplace_back(UVWto - UVWfrom);
+    }
+
+    for (int corner = 0; corner < 2; corner++)
+    {
+        int edge = (corner + 1) % 3;
+        assert((cornerUVW[corner][coord1] - cornerUVW[edge][coord1]) * edgeVecs[edge][coord3]
+                   - (cornerUVW[corner][coord3] - cornerUVW[edge][coord3]) * edgeVecs[edge][coord1]
+               != 0);
+        barCoords[corner] = ((UVW[coord1] - cornerUVW[edge][coord1]) * edgeVecs[edge][coord3]
+                             - (UVW[coord3] - cornerUVW[edge][coord3]) * edgeVecs[edge][coord1])
+                            / ((cornerUVW[corner][coord1] - cornerUVW[edge][coord1]) * edgeVecs[edge][coord3]
+                               - (cornerUVW[corner][coord3] - cornerUVW[edge][coord3]) * edgeVecs[edge][coord1]);
+        if (barCoords[corner] < 0 || barCoords[corner] > 1)
+            return false;
+    }
+
+    barCoords[2] = Q(1) - barCoords[0] - barCoords[1];
+    if (barCoords[2] < 0)
+        return false;
+
+    assert(barCoords[0] + barCoords[1] + barCoords[2] == 1);
+    assert(barCoords[0] >= 0 && barCoords[1] >= 0 && barCoords[2] >= 0);
+    return true;
 }
 
 } // namespace mc3d
