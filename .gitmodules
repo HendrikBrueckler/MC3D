@@ -1,6 +1,3 @@
-[submodule "extern/OpenVolumeMesh"]
-	path = extern/OpenVolumeMesh
-	url = https://www.graphics.rwth-aachen.de:9000/OpenVolumeMesh/OpenVolumeMesh.git
 [submodule "extern/googletest"]
 	path = extern/googletest
 	url = https://github.com/google/googletest.git

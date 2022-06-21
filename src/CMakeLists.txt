@@ -1,34 +1,4 @@
 ### Find dependencies
-# gmp
-find_package(GMP REQUIRED)
-find_package(GMPXX REQUIRED)
-list(APPEND MC3D_LIB_LIST ${GMP_LIBRARIES} ${GMPXX_LIBRARY})
-
-# OVM
-if (NOT TARGET OpenVolumeMesh::OpenVolumeMesh)
-    set(CMAKE_CXX_STANDARD 17)
-    set(CXX_STANDARD_REQUIRED ON)
-    if(EXISTS "${PROJECT_SOURCE_DIR}/extern/OpenVolumeMesh/CMakeLists.txt")
-        add_subdirectory(${PROJECT_SOURCE_DIR}/extern/OpenVolumeMesh extern/OpenVolumeMesh EXCLUDE_FROM_ALL)
-    else()
-        find_package(OpenVolumeMesh REQUIRED)
-    endif()
-endif()
-list(APPEND MC3D_LIB_LIST OpenVolumeMesh::OpenVolumeMesh)
-
-# glog
-if (NOT TARGET glog::glog)
-    if(EXISTS "${PROJECT_SOURCE_DIR}/extern/glog/CMakeLists.txt")
-        add_subdirectory(${PROJECT_SOURCE_DIR}/extern/glog extern/glog EXCLUDE_FROM_ALL)
-    else()
-        find_package(glog REQUIRED)
-    endif()
-endif()
-list(APPEND MC3D_LIB_LIST glog::glog)
-if (NOT MC3D_ENABLE_LOGGING)
-    list(APPEND MC3D_COMPILE_DEFINITIONS_PRV "GOOGLE_STRIP_LOG=10")
-endif()
-
 # TrulySeamless3D
 if (NOT TARGET TS3D::TS3D)
     if(EXISTS "${PROJECT_SOURCE_DIR}/extern/TrulySeamless3D/CMakeLists.txt")
@@ -43,6 +13,24 @@ if (NOT TARGET TS3D::TS3D)
     endif()
 endif()
 list(APPEND MC3D_LIB_LIST TS3D::TS3D)
+
+# gmp
+find_package(GMP REQUIRED)
+find_package(GMPXX REQUIRED)
+list(APPEND MC3D_LIB_LIST ${GMP_LIBRARIES} ${GMPXX_LIBRARY})
+
+# glog
+if (NOT TARGET glog::glog)
+    if(EXISTS "${PROJECT_SOURCE_DIR}/extern/glog/CMakeLists.txt")
+        add_subdirectory(${PROJECT_SOURCE_DIR}/extern/glog extern/glog EXCLUDE_FROM_ALL)
+    else()
+        find_package(glog REQUIRED)
+    endif()
+endif()
+list(APPEND MC3D_LIB_LIST glog::glog)
+if (NOT MC3D_ENABLE_LOGGING)
+    list(APPEND MC3D_COMPILE_DEFINITIONS_PRV "GOOGLE_STRIP_LOG=10")
+endif()
 
 ### Source files
 list(APPEND MC3D_SOURCE_LIST
@@ -66,7 +54,7 @@ list(APPEND MC3D_SOURCE_LIST
      "Mesh/TetMeshProps.cpp")
 
 ### Create target
-add_library(MC3D STATIC ${MC3D_SOURCE_LIST})
+add_library(MC3D ${MC3D_SOURCE_LIST})
 add_library(MC3D::MC3D ALIAS MC3D)
 
 ### Configure install paths
@@ -111,15 +99,9 @@ set_target_properties(MC3D PROPERTIES
                       CXX_STANDARD_REQUIRED ON)
 # compile options
 list(APPEND MC3D_COMPILE_OPTIONS_PRV "-Wall" "-Wextra" "-Werror" "-Wshadow" "-Wunused" "-Wunused-function")
-target_compile_options(MC3D PRIVATE ${MC3D_COMPILE_OPTIONS_PRV})# preprocessor defines
+target_compile_options(MC3D PRIVATE ${MC3D_COMPILE_OPTIONS_PRV})
 # preprocessor defines
 target_compile_definitions(MC3D PRIVATE ${MC3D_COMPILE_DEFINITIONS_PRV})
-
-### Include headers as system headers to prevent warnings/errors from strict compile definitions
-# target_include_directories(MC3D SYSTEM PUBLIC ${GMPXX_INCLUDE_DIR})
-# target_include_directories(MC3D SYSTEM PUBLIC ${PROJECT_SOURCE_DIR}/extern/OpenVolumeMesh/src)
-# target_include_directories(MC3D SYSTEM PUBLIC ${PROJECT_SOURCE_DIR}/extern/glog/src)
-# target_include_directories(MC3D SYSTEM PUBLIC ${PROJECT_SOURCE_DIR}/extern/TrulySeamles3D/include)
 
 ### Install and export
 install(DIRECTORY "${PROJECT_SOURCE_DIR}/include/MC3D"

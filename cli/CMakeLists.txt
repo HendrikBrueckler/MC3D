@@ -9,4 +9,4 @@ if (NOT TARGET CLI11::CLI11)
 endif()
 
 add_executable(${CLI_NAME} main.cpp)
-target_link_libraries(${CLI_NAME} MC3D::MC3D CLI11::CLI11 OpenVolumeMesh::OpenVolumeMesh)
+target_link_libraries(${CLI_NAME} MC3D::MC3D CLI11::CLI11)
