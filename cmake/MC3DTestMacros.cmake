@@ -15,5 +15,5 @@ macro(mc3d_add_test TESTNAME)
                            FOLDER tests
                            CXX_STANDARD 17
                            CXX_STANDARD_REQUIRED ON
-                           RUNTIME_OUTPUT_DIRECTORY ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/tests)
+                           RUNTIME_OUTPUT_DIRECTORY "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/tests")
 endmacro()

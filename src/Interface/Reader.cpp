@@ -1,7 +1,7 @@
 #include "MC3D/Interface/Reader.hpp"
 
 #define HEXEX_TESTING
-#include <TrulySeamless3D/trulyseamless.h>
+#include <TS3D/trulyseamless.h>
 #undef HEXEX_TESTING
 
 #include <utility>

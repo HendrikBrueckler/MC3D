@@ -1,13 +1,9 @@
-option(MC3D_SUBMODULES_MANUAL "Download MC3D submodules manually" OFF)
-
 find_package(Git QUIET)
 
-if(NOT ${MC3D_SUBMODULES_MANUAL})
-    if(GIT_FOUND AND EXISTS "${CMAKE_SOURCE_DIR}/.git")
-        git_update_submodules("${CMAKE_CURRENT_SOURCE_DIR}")
-    else()
-        message(WARNING "MC3D_SUBMODULES_MANUAL is off, but this is not a git repository")
-    endif()
+if(GIT_FOUND AND EXISTS "${CMAKE_SOURCE_DIR}/.git")
+    git_update_submodules("${CMAKE_CURRENT_SOURCE_DIR}")
+else()
+    message(WARNING "MC3D_SUBMODULES_MANUAL is off, but this is not a git repository")
 endif()
 
 if(NOT EXISTS "${PROJECT_SOURCE_DIR}/extern/OpenVolumeMesh/CMakeLists.txt"
