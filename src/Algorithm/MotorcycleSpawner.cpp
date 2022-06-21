@@ -83,7 +83,7 @@ MotorcycleSpawner::RetCode MotorcycleSpawner::spawnFeatureMotorcycles()
         {
             if (_meshPropsC.get<IS_FEATURE_F>(tetMesh.face_handle(hfCurr)))
             {
-                auto normal = axisAlignedHalfFaceNormal(hfCurr);
+                auto normal = normalDirUVW(hfCurr);
                 normals = normals | trans.invert().rotate(normal);
             }
             trans = trans.chain(_meshPropsC.hfTransition(hfCurr));
@@ -168,7 +168,7 @@ MotorcycleSpawner::RetCode MotorcycleSpawner::spawnFeatureMotorcycles()
         if (_meshPropsC.get<IS_FEATURE_F>(f) && !tetMesh.is_boundary(f))
         {
             // Sanity check
-            UVWDir halffaceNormal = axisAlignedHalfFaceNormal(tetMesh.halfface_handle(f, 0));
+            UVWDir halffaceNormal = normalDirUVW(tetMesh.halfface_handle(f, 0));
             if (dim(halffaceNormal) != 1)
             {
                 LOG(ERROR) << "Face " << f.idx() << " is feature"
@@ -424,7 +424,7 @@ MotorcycleSpawner::RetCode MotorcycleSpawner::spawnSelfadjacencySplitMotorcycle(
                         if (_meshPropsC.isBlockBoundary(hf))
                         {
                             onBoundary = true;
-                            if (dim(data.axis | axisAlignedHalfFaceNormal(hf)) == 1)
+                            if (dim(data.axis | normalDirUVW(hf)) == 1)
                                 onWrongBoundary = true;
                         }
                     if (onBoundary && !onWrongBoundary && spawnMotorcycle(e, tet, wallIsoCoord))
@@ -442,7 +442,7 @@ MotorcycleSpawner::RetCode MotorcycleSpawner::spawnSelfadjacencySplitMotorcycle(
             int wallIsoCoord = toCoord(data.axis);
             for (auto hf : tetMesh.cell_halffaces(tet))
             {
-                if (!_meshPropsC.isBlockBoundary(hf) || dim(data.axis | axisAlignedHalfFaceNormal(hf)) == 1)
+                if (!_meshPropsC.isBlockBoundary(hf) || dim(data.axis | normalDirUVW(hf)) == 1)
                     continue;
                 // Find any edge that is splittable
                 for (auto he : tetMesh.halfface_halfedges(hf))

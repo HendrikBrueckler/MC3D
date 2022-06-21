@@ -218,15 +218,14 @@ class TetMeshNavigator
     Q volumeUVW(const OVM::CellHandle& tet) const;
 
     /**
-     * @brief Get the normal direction of \p hf which must be a axis-plane aligned halfface, i.e. be const
-     *        in exactly one coordinate out of U/V/W. The direction is given in the coordinate system
+     * @brief Get the normal direction of \p hf. The direction is given in the coordinate system
      *        of incident_cell( \p hf )
      *
      * @param hf IN: halfface
      * @param trans IN: transition to apply to the direction before retrieval
      * @return UVWDir direction of the normal of \p hf
      */
-    UVWDir axisAlignedHalfFaceNormal(const OVM::HalfFaceHandle& hf, const Transition& trans = Transition()) const;
+    UVWDir normalDirUVW(const OVM::HalfFaceHandle& hf, const Transition& trans = Transition()) const;
 
     /**
      * @brief Get the direction of \p e in the coordinate system of \p tet as a simplified (ZERO or NON_ZERO)

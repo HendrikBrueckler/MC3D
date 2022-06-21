@@ -330,7 +330,7 @@ Q TetMeshNavigator::volumeUVW(const OVM::CellHandle& tet) const
     return -dot(UVWs[0] - UVWs[3], cross(UVWs[1] - UVWs[3], UVWs[2] - UVWs[3])) / 6u;
 }
 
-UVWDir TetMeshNavigator::axisAlignedHalfFaceNormal(const OVM::HalfFaceHandle& hf, const Transition& trans) const
+UVWDir TetMeshNavigator::normalDirUVW(const OVM::HalfFaceHandle& hf, const Transition& trans) const
 {
     assert(_meshPropsC.isAllocated<CHART>());
     auto tet = _meshPropsC.mesh.incident_cell(hf);
@@ -352,25 +352,9 @@ UVWDir TetMeshNavigator::axisAlignedHalfFaceNormal(const OVM::HalfFaceHandle& hf
     for (auto v : _meshPropsC.mesh.halfface_vertices(hf))
         hfUVWs.emplace_back(trans.rotate(chart.at(v)));
 
-    for (int i = 0; i < 3; i++)
-    {
-        if (hfUVWs[0][i] == hfUVWs[1][i] && hfUVWs[1][i] == hfUVWs[2][i])
-        {
-            bool pos = (vOppUVW[i] < hfUVWs[0][i]) != invertSign;
-            switch (i)
-            {
-            case 0:
-                return pos ? UVWDir::POS_U : UVWDir::NEG_U;
-            case 1:
-                return pos ? UVWDir::POS_V : UVWDir::NEG_V;
-            case 2:
-                return pos ? UVWDir::POS_W : UVWDir::NEG_W;
-            default:
-                return UVWDir::NONE;
-            }
-        }
-    }
-    throw std::logic_error("axisAlignedHalfFaceNormal() received non axis aligned halfface");
+    auto dir = toDir(cross(hfUVWs[1] - hfUVWs[0], hfUVWs[2] - hfUVWs[0]));
+
+    return invertSign ? dir : -dir;
 }
 
 UVWDir TetMeshNavigator::edgeDirection(const OVM::EdgeHandle& e, const OVM::CellHandle& tet) const

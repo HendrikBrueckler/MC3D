@@ -151,7 +151,7 @@ MCBuilder::gatherBlockData(const OVM::CellHandle& tetStart, vector<bool>& tetVis
             if (_meshProps.isBlockBoundary(hf))
             {
                 // Add patch halfface
-                UVWDir hfNormal1 = axisAlignedHalfFaceNormal(hf);
+                UVWDir hfNormal1 = normalDirUVW(hf);
                 if (dim(hfNormal1) != 1)
                 {
                     invalidWalls = true;
@@ -180,7 +180,7 @@ MCBuilder::gatherBlockData(const OVM::CellHandle& tetStart, vector<bool>& tetVis
                     visitedTetEdges.insert({tet, e});
                     visitedTetEdges.insert({tetMesh.incident_cell(adjHf), e});
 
-                    auto hfNormal2 = axisAlignedHalfFaceNormal(adjHf);
+                    auto hfNormal2 = normalDirUVW(adjHf);
                     if (hfNormal1 != hfNormal2)
                     {
                         // Add block-arc edge
@@ -215,7 +215,7 @@ MCBuilder::gatherBlockData(const OVM::CellHandle& tetStart, vector<bool>& tetVis
                                 {
                                     if (_meshProps.isBlockBoundary(hfNeighbor))
                                     {
-                                        UVWDir hfNormal = axisAlignedHalfFaceNormal(hfNeighbor);
+                                        UVWDir hfNormal = normalDirUVW(hfNeighbor);
                                         if ((dir2 & hfNormal) == UVWDir::NONE)
                                         {
                                             assert(hfNormal3 == UVWDir::NONE || hfNormal3 == hfNormal);
