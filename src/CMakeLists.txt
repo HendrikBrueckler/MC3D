@@ -84,7 +84,11 @@ configure_package_config_file(../MC3DConfig.cmake.in
 target_include_directories(MC3D
                            PUBLIC
                            "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/../include>"
-                           "$<INSTALL_INTERFACE:${INSTALL_INCLUDE_DIR}>")
+                           "$<INSTALL_INTERFACE:${INSTALL_INCLUDE_DIR}>"
+                           "$<BUILD_INTERFACE:${GMP_INCLUDE_DIRS}>"
+                           "$<BUILD_INTERFACE:${GMPXX_INCLUDE_DIR}>"
+                           "$<INSTALL_INTERFACE:${GMP_INCLUDE_DIRS}>"
+                           "$<INSTALL_INTERFACE:${GMPXX_INCLUDE_DIR}>")
 
 ### Link with dependencies
 target_link_libraries_system(MC3D PUBLIC ${MC3D_LIB_LIST})
