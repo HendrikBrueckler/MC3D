@@ -13,9 +13,9 @@ namespace mc3d
  */
 enum class SingularNodeType
 {
-    REGULAR,      // Regular node, nSingularArcs == 0
-    SEMI_SINGULAR,// On a singular arc, nSingularArcs == 2
-    SINGULAR,     // Singular arc branching point (nSingularArcs != 0, != 2)
+    REGULAR,       // Regular node, nSingularArcs == 0
+    SEMI_SINGULAR, // On a singular arc, nSingularArcs == 2
+    SINGULAR,      // Singular arc branching point (nSingularArcs != 0, != 2)
 };
 
 /**
@@ -23,9 +23,10 @@ enum class SingularNodeType
  */
 enum class FeatureNodeType
 {
-    REGULAR,      // Regular node, nFeatureArcs == 0
-    SEMI_FEATURE, // On a singular arc, nFeatureArcs == 2
-    FEATURE,      // Feature arc branching point (nFeatureArcs != 0, != 2)
+    REGULAR,                      // Regular node, nFeatureArcs == 0
+    SEMI_FEATURE,                 // On a singular arc, nFeatureArcs == 2
+    FEATURE,                      // Feature arc branching point (nFeatureArcs != 0, != 2)
+    SEMI_FEATURE_SINGULAR_BRANCH, // Feature/singular arc branching point (nFeatureArcs == 2, nSingularArcs == 2)
 };
 
 using NodeType = std::pair<SingularNodeType, FeatureNodeType>;

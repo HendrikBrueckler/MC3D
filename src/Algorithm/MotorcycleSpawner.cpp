@@ -103,21 +103,31 @@ MotorcycleSpawner::RetCode MotorcycleSpawner::spawnFeatureMotorcycles()
     }
 
     // Mark each vertex that has != 0 or != 2 feature edges as feature
+    // Mark each vertex that has 2 singular edges + 2 feature edges as feature
     for (auto v : tetMesh.vertices())
     {
         if (_meshPropsC.get<IS_FEATURE_V>(v))
             continue;
 
         int nFeatureEdges = 0;
+        int nNonFeatureSingularEdges = 0;
         for (auto e : tetMesh.vertex_edges(v))
             if (_meshPropsC.get<IS_FEATURE_E>(e))
                 nFeatureEdges++;
+            else if (_meshPropsC.get<IS_SINGULAR>(e))
+                nNonFeatureSingularEdges++;
         if (nFeatureEdges != 2)
         {
             if (nFeatureEdges != 0)
                 _meshProps.set<IS_FEATURE_V>(v, true);
             continue;
         }
+        if (nNonFeatureSingularEdges == 2)
+        {
+            _meshProps.set<IS_FEATURE_V>(v, true);
+            continue;
+        }
+
 
         auto tetRef = *tetMesh.vc_iter(v);
 

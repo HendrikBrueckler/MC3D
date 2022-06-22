@@ -39,6 +39,23 @@ Reader::RetCode Reader::readSeamlessParam()
         return ret;
     }
 
+    if (ret != INVALID_CHART)
+    {
+        ret = readFeatures();
+        if (ret != SUCCESS)
+        {
+            if (_meshProps.isAllocated<IS_FEATURE_V>())
+                _meshProps.release<IS_FEATURE_V>();
+            if (_meshProps.isAllocated<IS_FEATURE_E>())
+                _meshProps.release<IS_FEATURE_E>();
+            if (_meshProps.isAllocated<IS_FEATURE_F>())
+                _meshProps.release<IS_FEATURE_F>();
+            return ret;
+        }
+    }
+    else
+        readFeatures();
+
     return ret;
 }
 
@@ -195,18 +212,19 @@ Reader::RetCode Reader::readTetsAndCharts()
         else
             LOG(INFO) << "Seamless parametrization was read in floating point format, sanitizing...";
 
-        try {
+        try
+        {
             TS3D::TrulySeamless3D sanitizer(tetMesh);
-            for (auto tet: tetMesh.cells())
-                for (auto v: tetMesh.tet_vertices(tet))
+            for (auto tet : tetMesh.cells())
+                for (auto v : tetMesh.tet_vertices(tet))
                     sanitizer.setParam(tet, v, Vec3Q2d(_meshProps.ref<CHART>(tet).at(v)));
             if (!sanitizer.init() || !sanitizer.sanitize(0.0, true))
             {
                 LOG(ERROR) << "Sanitization failed";
                 return INVALID_CHART;
             }
-            for (auto tet: tetMesh.cells())
-                for (auto v: tetMesh.tet_vertices(tet))
+            for (auto tet : tetMesh.cells())
+                for (auto v : tetMesh.tet_vertices(tet))
                     _meshProps.ref<CHART>(tet).at(v) = sanitizer.getParam(tet, v);
         }
         catch (std::runtime_error& e)
@@ -234,6 +252,102 @@ Reader::RetCode Reader::readTetsAndCharts()
     }
 
     return invalidCharts ? INVALID_CHART : SUCCESS;
+}
+
+Reader::RetCode Reader::readFeatures()
+{
+    TetMesh& tetMesh = _meshProps.mesh;
+
+    int n_ftv(0), n_fte(0), n_ftf(0);
+
+    _is >> n_ftv;
+    if (_is.eof())
+    {
+        LOG(INFO) << "No features specified";
+        return SUCCESS;
+    }
+    else if (!_is.good())
+    {
+        LOG(INFO) << "Error reading features";
+        return INVALID_WALLS;
+    }
+    _is >> n_fte >> n_ftf;
+    if (!_is.good())
+    {
+        LOG(INFO) << "Error reading number of features";
+        return INVALID_WALLS;
+    }
+
+    // Property allocation
+    LOG(INFO) << "read #feature_vertices = " << n_ftv << ", read #feature_edges = " << n_fte
+              << ", read #feature_faces = " << n_ftf << std::endl;
+    if (n_ftv > 0 && !_meshProps.isAllocated<IS_FEATURE_V>())
+        _meshProps.allocate<IS_FEATURE_V>(false);
+    if (n_fte > 0 && !_meshProps.isAllocated<IS_FEATURE_E>())
+        _meshProps.allocate<IS_FEATURE_E>(false);
+    if (n_ftf > 0 && !_meshProps.isAllocated<IS_FEATURE_F>())
+        _meshProps.allocate<IS_FEATURE_F>(false);
+
+    for (int i = 0; i < n_ftv; ++i)
+    {
+        int vidx;
+        _is >> vidx;
+        if (!_is.good())
+        {
+            LOG(INFO) << "Error reading features";
+            return INVALID_WALLS;
+        }
+        _meshProps.set<IS_FEATURE_V>(OVM::VertexHandle(vidx), true);
+    }
+
+    for (int i = 0; i < n_fte; ++i)
+    {
+        int v0idx, v1idx;
+        _is >> v0idx >> v1idx;
+        if (!_is.good())
+        {
+            LOG(INFO) << "Error reading features vertices";
+            return INVALID_WALLS;
+        }
+
+        OVM::HalfEdgeHandle heh = tetMesh.halfedge(OVM::VertexHandle(v0idx), OVM::VertexHandle(v1idx));
+        if (!heh.is_valid())
+        {
+            LOG(INFO) << "Error reading feature edges";
+            return INVALID_WALLS;
+        }
+        auto eh = tetMesh.edge_handle(heh);
+        _meshProps.set<IS_FEATURE_E>(eh, true);
+    }
+
+    for (int i = 0; i < n_ftf; ++i)
+    {
+        int v0idx, v1idx, v2idx;
+        _is >> v0idx >> v1idx >> v2idx;
+        if (!_is.good())
+        {
+            LOG(INFO) << "Error reading feature faces";
+            return INVALID_WALLS;
+        }
+
+        // map vertex indices
+        std::vector<OVM::VertexHandle> vhs;
+        vhs.push_back(OVM::VertexHandle(v0idx));
+        vhs.push_back(OVM::VertexHandle(v1idx));
+        vhs.push_back(OVM::VertexHandle(v2idx));
+
+        // get corresponding halfface in original mesh
+        OVM::HalfFaceHandle hfh = tetMesh.halfface(vhs);
+        if (!hfh.is_valid())
+        {
+            LOG(INFO) << "Error reading features";
+            return INVALID_WALLS;
+        }
+        OVM::FaceHandle fh = tetMesh.face_handle(hfh);
+        _meshProps.set<IS_FEATURE_F>(fh, true);
+    }
+
+    return SUCCESS;
 }
 
 Reader::RetCode Reader::readWalls()

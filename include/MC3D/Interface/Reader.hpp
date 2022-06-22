@@ -84,6 +84,13 @@ class Reader : public TetMeshManipulator
     RetCode readTetsAndCharts();
 
     /**
+     * @brief Read feature markers from internal stream
+     *
+     * @return RetCode SUCCESS
+     */
+    RetCode readFeatures();
+
+    /**
      * @brief Read walls from internal stream
      *
      * @return RetCode SUCCESS or MISSING_WALLS or INVALID_WALLS

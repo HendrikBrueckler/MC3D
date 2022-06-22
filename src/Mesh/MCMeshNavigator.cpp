@@ -364,13 +364,21 @@ NodeType MCMeshNavigator::nodeType(const OVM::VertexHandle& n) const
     else if (_mcMeshPropsC.isAllocated<IS_FEATURE_E>())
     {
         int nFeatureArcs = 0;
+        int nNonFeatureSingularArcs = 0;
         for (auto a : mcMesh.vertex_edges(n))
             if (_mcMeshPropsC.get<IS_FEATURE_E>(a))
                 nFeatureArcs++;
+            else if (_mcMeshPropsC.get<IS_SINGULAR>(a))
+                nNonFeatureSingularArcs++;
         if (nFeatureArcs == 0)
             type.second = FeatureNodeType::REGULAR;
         else if (nFeatureArcs == 2)
-            type.second = FeatureNodeType::SEMI_FEATURE;
+        {
+            if (nNonFeatureSingularArcs != 0)
+                type.second = FeatureNodeType::SEMI_FEATURE_SINGULAR_BRANCH;
+            else
+                type.second = FeatureNodeType::SEMI_FEATURE;
+        }
         else
         {
             // Should never happen, because these types of nodes should automatically have been assigned IS_FEATURE_V
@@ -420,7 +428,7 @@ NonSingNodeCoordination MCMeshNavigator::nonSingularNodeCoordination(const OVM::
                     || (!semiSingular
                         && ((semiFeature && _mcMeshPropsC.isAllocated<IS_FEATURE_E>()
                              && _mcMeshPropsC.get<IS_FEATURE_E>(mcMesh.edge_handle(ha)))
-                            || (!nc.nBoundary || (nc.nBoundary && mcMesh.is_boundary(ha))))))
+                            || (!semiFeature && (!nc.nBoundary || (nc.nBoundary && mcMesh.is_boundary(ha)))))))
                 {
                     haPrincipal = ha;
                     break;
@@ -1206,8 +1214,10 @@ void MCMeshNavigator::getCriticalLinks(vector<CriticalLink>& criticalLinks,
     for (auto n : mcMesh.vertices())
     {
         auto type = nodeType(n);
-        if (type.first == SingularNodeType::SINGULAR || type.second == FeatureNodeType::FEATURE
-            || (type.first == SingularNodeType::SEMI_SINGULAR && type.second == FeatureNodeType::SEMI_FEATURE))
+        if (type.first == SingularNodeType::SINGULAR
+            || (includeFeatures
+                && (type.second == FeatureNodeType::FEATURE
+                    || type.second == FeatureNodeType::SEMI_FEATURE_SINGULAR_BRANCH)))
             nsStart.insert(n);
     }
 
@@ -1223,12 +1233,12 @@ void MCMeshNavigator::getCriticalLinks(vector<CriticalLink>& criticalLinks,
                 if (a2criticalLinkIdx.find(a) == a2criticalLinkIdx.end())
                 {
                     traceCriticalLink(ha,
-                                    arcIsCritical,
-                                    nsStart,
-                                    criticalLinks,
-                                    a2criticalLinkIdx,
-                                    n2criticalLinksOut,
-                                    n2criticalLinksIn);
+                                      arcIsCritical,
+                                      nsStart,
+                                      criticalLinks,
+                                      a2criticalLinkIdx,
+                                      n2criticalLinksOut,
+                                      n2criticalLinksIn);
                 }
             }
         }
@@ -1257,6 +1267,8 @@ void MCMeshNavigator::getCriticalLinks(vector<CriticalLink>& criticalLinks,
                               n2criticalLinksOut,
                               n2criticalLinksIn);
         }
+    DLOG(INFO) << "Found " << criticalLinks.size() << " critical links with " << a2criticalLinkIdx.size()
+               << " critical arcs and " << nsStart.size() << " critical nodes";
 }
 
 void MCMeshNavigator::traceCriticalLink(const OVM::HalfEdgeHandle& haStart,
