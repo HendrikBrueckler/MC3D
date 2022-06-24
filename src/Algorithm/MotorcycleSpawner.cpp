@@ -213,11 +213,12 @@ MotorcycleSpawner::RetCode MotorcycleSpawner::spawnFeatureMotorcycles()
         }
     }
 
-    for (auto v : tetMesh.vertices())
+    int nVs = tetMesh.n_vertices();
+    for (int i = 0; i < nVs; i++)
     {
+        auto v = OVM::VertexHandle(i);
         if (_meshPropsC.get<IS_FEATURE_V>(v))
         {
-            // TODO first create all the possible axis-aligned edges
             // for each face incident on v:
             //      if face normal is axis aligned
             //          if vtx. coord lies between opp halfedge
@@ -272,7 +273,6 @@ MotorcycleSpawner::RetCode MotorcycleSpawner::spawnFeatureMotorcycles()
                         break;
                 }
             }
-            // TODO first create all the possible axis-aligned edges
             // for each tet incident on v:
             //      for each opposite halfface of tet on v
             //          for each coordinate:
@@ -292,12 +292,14 @@ MotorcycleSpawner::RetCode MotorcycleSpawner::spawnFeatureMotorcycles()
                             hfOpp = hf;
                             break;
                         }
-                    auto vs = tetMesh.halfface_vertices(
-                        (hfOpp.idx() % 2) == 0 ? hfOpp : tetMesh.opposite_halfface_handle(hfOpp));
                     for (int constCoord = 0; constCoord < 3; constCoord++)
                     {
                         Vec3Q barCoords;
-                        if (barycentricCoords2D(hfOpp, _meshPropsC.ref<CHART>(tet).at(v), constCoord, barCoords))
+                        if (barycentricCoords2D((hfOpp.idx() % 2) == 0 ? hfOpp
+                                                                       : tetMesh.opposite_halfface_handle(hfOpp),
+                                                _meshPropsC.ref<CHART>(tet).at(v),
+                                                constCoord,
+                                                barCoords))
                         {
                             if (barCoords[0] == 0 || barCoords[1] == 0 || barCoords[2] == 0)
                                 continue;
