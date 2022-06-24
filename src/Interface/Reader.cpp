@@ -52,6 +52,7 @@ Reader::RetCode Reader::readSeamlessParam()
                 _meshProps.release<IS_FEATURE_F>();
             return ret;
         }
+        ret = sanitizeInput();
     }
     else
         readFeatures();
@@ -61,19 +62,56 @@ Reader::RetCode Reader::readSeamlessParam()
 
 Reader::RetCode Reader::readSeamlessParamWithWalls()
 {
-    auto ret = readSeamlessParam();
+    _meshProps.mesh.clear(false);
+
+    auto ret = checkFile();
     if (ret != SUCCESS)
         return ret;
 
-    ret = readWalls();
+    LOG(INFO) << "Reading parametrized tet mesh from " << _fileName;
+
+    ret = readVertices();
     if (ret != SUCCESS)
     {
         _meshProps.mesh.clear(false);
-        _meshProps.release<IS_WALL>();
+        return ret;
+    }
+    ret = readTetsAndCharts();
+    if (ret != SUCCESS && ret != INVALID_CHART)
+    {
+        _meshProps.mesh.clear(false);
+        _meshProps.release<CHART>();
         return ret;
     }
 
-    return SUCCESS;
+    if (ret != INVALID_CHART)
+    {
+        ret = readWalls();
+        if (ret != SUCCESS)
+        {
+            _meshProps.mesh.clear(false);
+            _meshProps.release<IS_WALL>();
+            return ret;
+        }
+        ret = readFeatures();
+        if (ret != SUCCESS)
+        {
+            if (_meshProps.isAllocated<IS_FEATURE_V>())
+                _meshProps.release<IS_FEATURE_V>();
+            if (_meshProps.isAllocated<IS_FEATURE_E>())
+                _meshProps.release<IS_FEATURE_E>();
+            if (_meshProps.isAllocated<IS_FEATURE_F>())
+                _meshProps.release<IS_FEATURE_F>();
+            return ret;
+        }
+        ret = sanitizeInput();
+    }
+    else if (readWalls() != SUCCESS)
+        return ret;
+    else if (readFeatures() != SUCCESS)
+        return ret;
+
+    return ret;
 }
 
 Reader::RetCode Reader::checkFile()
@@ -130,7 +168,7 @@ Reader::RetCode Reader::readTetsAndCharts()
     }
     LOG(INFO) << "Mesh has " << NC << " tets";
 
-    bool exactMap = false;
+    _exactInput = false;
     std::stringstream stringToDouble;
     for (int cell = 0; cell < NC; cell++)
     {
@@ -193,46 +231,12 @@ Reader::RetCode Reader::readTetsAndCharts()
                 }
                 else
                 {
-                    exactMap = true;
+                    _exactInput = true;
                     uvwQ[i] = Q(uvw[i]);
                 }
             }
             newChart[OVM::VertexHandle{vtx[corner]}] = uvwQ;
         }
-    }
-
-    if (exactMap && !_forceSanitization)
-    {
-        LOG(INFO) << "Seamless parametrization was read in exact format, skipping sanitization";
-    }
-    else
-    {
-        if (_forceSanitization)
-            LOG(INFO) << "Sanitization explicitly requested by user, sanitizing...";
-        else
-            LOG(INFO) << "Seamless parametrization was read in floating point format, sanitizing...";
-
-        try
-        {
-            TS3D::TrulySeamless3D sanitizer(tetMesh);
-            for (auto tet : tetMesh.cells())
-                for (auto v : tetMesh.tet_vertices(tet))
-                    sanitizer.setParam(tet, v, Vec3Q2d(_meshProps.ref<CHART>(tet).at(v)));
-            if (!sanitizer.init() || !sanitizer.sanitize(0.0, true))
-            {
-                LOG(ERROR) << "Sanitization failed";
-                return INVALID_CHART;
-            }
-            for (auto tet : tetMesh.cells())
-                for (auto v : tetMesh.tet_vertices(tet))
-                    _meshProps.ref<CHART>(tet).at(v) = sanitizer.getParam(tet, v);
-        }
-        catch (std::runtime_error& e)
-        {
-            LOG(ERROR) << "Sanitization failed: " << e.what();
-            return INVALID_CHART;
-        }
-        LOG(INFO) << "Sanitization successful";
     }
 
     // Check charts
@@ -391,6 +395,69 @@ Reader::RetCode Reader::readWalls()
         }
         _meshProps.set<IS_WALL>(f, true);
         _meshProps.set<WALL_DIST>(f, wallDist);
+    }
+
+    return SUCCESS;
+}
+
+Reader::RetCode Reader::sanitizeInput()
+{
+    if (_exactInput && !_forceSanitization)
+    {
+        LOG(INFO) << "Seamless parametrization was read in exact format, skipping sanitization";
+    }
+    else
+    {
+        if (_forceSanitization)
+            LOG(INFO) << "Sanitization explicitly requested by user, sanitizing...";
+        else
+            LOG(INFO) << "Seamless parametrization was read in floating point format, sanitizing...";
+
+        TetMesh& tetMesh = _meshProps.mesh;
+
+        TS3D::TrulySeamless3D sanitizer(tetMesh);
+        for (auto tet : tetMesh.cells())
+            for (auto v : tetMesh.tet_vertices(tet))
+                sanitizer.setParam(tet, v, Vec3Q2d(_meshProps.ref<CHART>(tet).at(v)));
+
+        if (_meshProps.isAllocated<IS_FEATURE_E>())
+        {
+            for (auto e : tetMesh.edges())
+                if (_meshProps.get<IS_FEATURE_E>(e))
+                    sanitizer.setFeature(e);
+        }
+        if (_meshProps.isAllocated<IS_FEATURE_V>())
+        {
+            for (auto v : tetMesh.vertices())
+                if (_meshProps.get<IS_FEATURE_V>(v))
+                    sanitizer.setFeature(v);
+        }
+        if (_meshProps.isAllocated<IS_FEATURE_F>())
+        {
+            for (auto f : tetMesh.faces())
+                if (_meshProps.get<IS_FEATURE_F>(f))
+                    sanitizer.setFeature(f);
+        }
+
+        try
+        {
+            if (!sanitizer.init() || !sanitizer.sanitize(0.0, true))
+            {
+                LOG(ERROR) << "Sanitization failed";
+                return INVALID_CHART;
+            }
+        }
+        catch (std::runtime_error& e)
+        {
+            LOG(ERROR) << "Sanitization failed: " << e.what();
+            return INVALID_CHART;
+        }
+
+        for (auto tet : tetMesh.cells())
+            for (auto v : tetMesh.tet_vertices(tet))
+                _meshProps.ref<CHART>(tet).at(v) = sanitizer.getParam(tet, v);
+
+        LOG(INFO) << "Sanitization successful";
     }
 
     return SUCCESS;

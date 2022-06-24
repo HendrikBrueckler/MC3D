@@ -61,6 +61,7 @@ class Reader : public TetMeshManipulator
     const std::string _fileName;
     std::ifstream _is;
     bool _forceSanitization;
+    bool _exactInput = false;
 
     /**
      * @brief Check if file is readable
@@ -96,6 +97,13 @@ class Reader : public TetMeshManipulator
      * @return RetCode SUCCESS or MISSING_WALLS or INVALID_WALLS
      */
     RetCode readWalls();
+
+    /**
+     * @brief Sanitizes the input parametrization (make input truly seamless)
+     *
+     * @return RetCode SUCCESS or INVALID_MAP
+     */
+    RetCode sanitizeInput();
 };
 
 } // namespace mc3d
