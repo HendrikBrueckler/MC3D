@@ -111,14 +111,14 @@ MCGenerator::RetCode MCGenerator::traceMC(bool splitTori, bool splitSelfadjacenc
     return SUCCESS;
 }
 
-MCGenerator::RetCode MCGenerator::reduceMC(bool preserveSingularWalls, bool avoidSelfadjacency)
+MCGenerator::RetCode MCGenerator::reduceMC(bool preserveSingularWalls, bool avoidSelfadjacency, bool preserveFeatures)
 {
     const MCMesh& mesh = _meshPropsC.get<MC_MESH_PROPS>()->mesh;
     LOG(INFO) << "Starting to reduce raw MC with " << mesh.n_logical_cells() << " blocks and " << mesh.n_logical_faces()
               << " walls.";
 
     MCReducer reducer(_meshProps);
-    reducer.init(preserveSingularWalls, avoidSelfadjacency, true);
+    reducer.init(preserveSingularWalls, avoidSelfadjacency, preserveFeatures);
 
     while (reducer.isReducible())
         reducer.removeNextPatch();

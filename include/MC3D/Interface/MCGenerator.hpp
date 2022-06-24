@@ -58,9 +58,10 @@ class MCGenerator : public TetMeshManipulator
      *
      * @param preserveSingularWalls IN: whether to keep all walls around singularities
      * @param splitSelfadjacency IN: whether to split self-adjacent blocks
+     * @param preserveFeatures IN: whether to prevent removal at feature elements
      * @return RetCode SUCCESS or errorcode
      */
-    RetCode reduceMC(bool preserveSingularWalls, bool splitSelfadjacency);
+    RetCode reduceMC(bool preserveSingularWalls, bool splitSelfadjacency, bool preserveFeatures = true);
 };
 
 } // namespace mc3d
