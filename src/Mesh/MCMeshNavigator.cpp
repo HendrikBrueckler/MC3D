@@ -653,10 +653,10 @@ NonSingNodeCoordination MCMeshNavigator::nonSingularNodeCoordination(const OVM::
                                         assert(bLowerNext.is_valid());
                                         if (haOpp.is_valid())
                                             nc.dir2singleQuadrantP[{NonSingNodeCoordination::MINUS_PRINCIPAL_DIR, ip1}]
-                                                = mcMesh.face_handle(hpLower);
+                                                = mcMesh.face_handle(hpLowerNext);
                                         else if (i + 3 < nc.numPlanarDirs)
                                             nc.dir2doubleQuadrantP[{NonSingNodeCoordination::MINUS_PRINCIPAL_DIR, ip1}]
-                                                = mcMesh.face_handle(hpLower);
+                                                = mcMesh.face_handle(hpLowerNext);
                                         if (isFlatInBlock(mcMesh.edge_handle(haOpp), bLowerNext))
                                             nc.dir2doubleOctantB[{NonSingNodeCoordination::MINUS_PRINCIPAL_DIR, ip1}]
                                                 = bLowerNext;
