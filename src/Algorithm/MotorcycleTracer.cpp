@@ -173,10 +173,10 @@ MotorcycleTracer::RetCode MotorcycleTracer::traceMotorcycle(const Motorcycle& mo
         _eSplits++;
 
         // Mark the newly created splitting face as a new MC wall
-        newWallHf = tetMesh.halfface({elems.vB, elems.vC, vN});
+        newWallHf = tetMesh.find_halfface({elems.vB, elems.vC, vN});
         // Propagate to the two (newly created) edges of the new wall face
-        heNext1 = tetMesh.halfedge(vN, elems.vB);
-        heNext2 = tetMesh.halfedge(elems.vC, vN);
+        heNext1 = tetMesh.find_halfedge(vN, elems.vB);
+        heNext2 = tetMesh.find_halfedge(elems.vC, vN);
     }
     else
     {

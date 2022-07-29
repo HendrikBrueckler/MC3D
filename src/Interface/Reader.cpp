@@ -314,7 +314,7 @@ Reader::RetCode Reader::readFeatures()
             return INVALID_WALLS;
         }
 
-        OVM::HalfEdgeHandle heh = tetMesh.halfedge(OVM::VertexHandle(v0idx), OVM::VertexHandle(v1idx));
+        OVM::HalfEdgeHandle heh = tetMesh.find_halfedge(OVM::VertexHandle(v0idx), OVM::VertexHandle(v1idx));
         if (!heh.is_valid())
         {
             LOG(INFO) << "Error reading feature edges";
@@ -341,7 +341,7 @@ Reader::RetCode Reader::readFeatures()
         vhs.push_back(OVM::VertexHandle(v2idx));
 
         // get corresponding halfface in original mesh
-        OVM::HalfFaceHandle hfh = tetMesh.halfface(vhs);
+        OVM::HalfFaceHandle hfh = tetMesh.find_halfface(vhs);
         if (!hfh.is_valid())
         {
             LOG(INFO) << "Error reading features";
@@ -387,7 +387,7 @@ Reader::RetCode Reader::readWalls()
             return MISSING_WALLS;
         }
 
-        OVM::FaceHandle f = tetMesh.face_handle(tetMesh.halfface({v0, v1, v2}));
+        OVM::FaceHandle f = tetMesh.face_handle(tetMesh.find_halfface({v0, v1, v2}));
         if (!f.is_valid())
         {
             LOG(ERROR) << "Faulty wall face in file " << _fileName;

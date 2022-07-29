@@ -393,7 +393,7 @@ MotorcycleSpawner::RetCode MotorcycleSpawner::spawnTorusSplitMotorcycle()
                             continue;
                         // edge is splittable
                         auto vNew = splitHalfEdge(he, tet, t);
-                        auto eSplit = tetMesh.edge_handle(tetMesh.halfedge(vNew, vs[2]));
+                        auto eSplit = tetMesh.edge_handle(tetMesh.find_halfedge(vNew, vs[2]));
                         for (auto tetSplit : tetMesh.edge_cells(eSplit))
                         {
                             // In same block?
@@ -479,7 +479,7 @@ MotorcycleSpawner::RetCode MotorcycleSpawner::spawnSelfadjacencySplitMotorcycle(
 
                     // edge is splittable
                     auto vNew = splitHalfEdge(he, tet, t);
-                    auto eSplit = tetMesh.edge_handle(tetMesh.halfedge(vNew, vs[2]));
+                    auto eSplit = tetMesh.edge_handle(tetMesh.find_halfedge(vNew, vs[2]));
                     for (auto tetSplit : tetMesh.edge_cells(eSplit))
                     {
                         if (dim(edgeDirection(eSplit, tetSplit)) != 1)

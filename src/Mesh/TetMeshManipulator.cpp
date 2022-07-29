@@ -298,9 +298,9 @@ OVM::VertexHandle TetMeshManipulator::splitAndReconstructParentChildRelations(
 
     OVM::VertexHandle vN = tetMesh.split_edge(heAD, Q(Q(1) - t).get_d());
 
-    OVM::HalfEdgeHandle heAN = tetMesh.halfedge(vA, vN);
+    OVM::HalfEdgeHandle heAN = tetMesh.find_halfedge(vA, vN);
     OVM::HalfEdgeHandle heNA = tetMesh.opposite_halfedge_handle(heAN);
-    OVM::HalfEdgeHandle heDN = tetMesh.halfedge(vD, vN);
+    OVM::HalfEdgeHandle heDN = tetMesh.find_halfedge(vD, vN);
     OVM::HalfEdgeHandle heND = tetMesh.opposite_halfedge_handle(heDN);
 
     OVM::EdgeHandle eAN = tetMesh.edge_handle(heAN);
@@ -333,7 +333,7 @@ OVM::VertexHandle TetMeshManipulator::splitAndReconstructParentChildRelations(
         auto& he = kv.first;
         auto& parentTet = kv.second;
         vector<OVM::VertexHandle> fNewVertices = {tetMesh.from_vertex_handle(he), tetMesh.to_vertex_handle(he), vN};
-        OVM::HalfFaceHandle hfNew1 = tetMesh.halfface(fNewVertices);
+        OVM::HalfFaceHandle hfNew1 = tetMesh.find_halfface(fNewVertices);
         OVM::HalfFaceHandle hfNew2 = tetMesh.opposite_halfface_handle(hfNew1);
         OVM::CellHandle tetNew1 = tetMesh.incident_cell(hfNew1);
         OVM::CellHandle tetNew2 = tetMesh.incident_cell(hfNew2);
