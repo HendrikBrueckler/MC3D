@@ -504,14 +504,14 @@ MCBuilder::RetCode MCBuilder::createAndMapPatches()
                         {
                             const auto& arcHalfedges = mcMeshProps.ref<ARC_MESH_HALFEDGES>(arc);
                             auto halfArc = mcMeshProps.mesh.halfedge_handle(arc, 0);
-                            if (std::find(arcHalfedges.begin(), arcHalfedges.end(), he) != arcHalfedges.end())
+                            if (std::find(arcHalfedges.begin(), arcHalfedges.end(), he) == arcHalfedges.end())
                                 halfArc = mcMeshProps.mesh.opposite_halfedge_handle(halfArc);
                             else
                             {
                                 assert(std::find(arcHalfedges.begin(),
                                                  arcHalfedges.end(),
                                                  tetMesh.opposite_halfedge_handle(he))
-                                       != arcHalfedges.end());
+                                       == arcHalfedges.end());
                             }
                             boundaryHalfarcs.insert(halfArc);
                         }
