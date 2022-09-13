@@ -235,7 +235,7 @@ MotorcycleSpawner::RetCode MotorcycleSpawner::spawnFeatureMotorcycles()
                     auto tet = tetMesh.incident_cell(hf);
                     auto heOpp = OVM::HalfEdgeHandle(-1);
                     for (auto he : tetMesh.halfface_halfedges(hf))
-                        if (tetMesh.to_vertex_handle(he) == v)
+                        if (tetMesh.from_vertex_handle(he) == v)
                         {
                             heOpp = tetMesh.next_halfedge_in_halfface(he, hf);
                             break;
@@ -517,6 +517,16 @@ bool MotorcycleSpawner::spawnMotorcycle(const OVM::EdgeHandle& e, const OVM::Cel
 
     const auto& chart = _meshPropsC.ref<CHART>(tet);
     auto evs = _meshPropsC.mesh.edge_vertices(e);
+
+    for (auto hf: _meshPropsC.mesh.cell_halffaces(tet))
+    {
+        if (_meshPropsC.mesh.is_boundary(_meshPropsC.mesh.face_handle(hf)))
+        {
+            auto vs = _meshPropsC.mesh.get_halfface_vertices(hf);
+            if (chart.at(vs[0])[wallIsoCoord] == chart.at(vs[1])[wallIsoCoord] && chart.at(vs[0])[wallIsoCoord] == chart.at(vs[2])[wallIsoCoord])
+                return false;
+        }
+    }
 
     // Encode propagation direction and plane iso direction
     Vec3i directions(0, 0, 0);
