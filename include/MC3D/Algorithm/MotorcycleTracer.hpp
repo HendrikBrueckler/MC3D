@@ -65,9 +65,9 @@ class MotorcycleTracer : public virtual TetMeshManipulator
      *
      * Requires props: CHILD_FACES
      *
-     * @return vector<OVM::FaceHandle> recently marked wall faces
+     * @return vector<FH> recently marked wall faces
      */
-    vector<OVM::FaceHandle> getNewWalls();
+    vector<FH> getNewWalls();
 
   private:
     /**
@@ -78,7 +78,7 @@ class MotorcycleTracer : public virtual TetMeshManipulator
      * @param he IN: halfedge of wall halfface marked by current motorcycle
      * @param hfWall wall halfface marked by current motorcycle
      */
-    void propagateAcrossEdge(const Motorcycle& mot, const OVM::HalfEdgeHandle& he, const OVM::HalfFaceHandle& hfWall);
+    void propagateAcrossEdge(const Motorcycle& mot, const HEH& he, const HFH& hfWall);
 
     /**
      * @brief Convenience method that iteratively processes child (and grandchild etc.) motorcycles until all
@@ -97,7 +97,7 @@ class MotorcycleTracer : public virtual TetMeshManipulator
      * @return false if already burnt/boundary/singular
      * @return true else
      */
-    bool isAlive(const OVM::EdgeHandle& e) const;
+    bool isAlive(const EH& e) const;
 
     /**
      * @brief Actually perform the tracing of motorcycle \p mot
@@ -112,7 +112,7 @@ class MotorcycleTracer : public virtual TetMeshManipulator
     int _qPops;              // number of motorcycles retrieved from the global queue over the entire tracing process
     int _eSplits;            // edges split over the entire tracing process
 
-    list<OVM::FaceHandle> newWalls; // list of recently marked wall faces
+    list<FH> newWalls; // list of recently marked wall faces
     bool _simulateBC;               // whether to simulate base complex
 };
 

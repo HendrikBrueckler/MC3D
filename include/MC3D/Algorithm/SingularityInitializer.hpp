@@ -43,6 +43,14 @@ class SingularityInitializer : public virtual TetMeshManipulator
      */
     RetCode initSingularities();
 
+    /**
+     * @brief Add feature markers where necessary, so that feature curves are always cyclic or bounded
+     *        by feature vertices, and feature surfaces are always closed or bounded by feature curves.
+     *
+     * @return RetCode SUCCESS
+     */
+    RetCode makeFeaturesConsistent();
+
   private:
     /**
      * @brief Sanity check for all edges registered as singularities
@@ -58,7 +66,7 @@ class SingularityInitializer : public virtual TetMeshManipulator
      * @param f IN: face
      * @return Transition transition from incident_cell(halfface_handle(f, 0)) into incident_cell(halfface_handle(f, 1))
      */
-    Transition calcTransition(const OVM::FaceHandle& f) const;
+    Transition calcTransition(const FH& f) const;
 };
 
 } // namespace mc3d

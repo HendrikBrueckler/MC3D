@@ -36,8 +36,8 @@ class InitializingFailureTest : public InitializingTest
         const Q delta = 1e-4;
 
         // Test for bad parametrization leading to false singularities
-        auto c = *meshRaw.c_iter();
-        auto v = *meshRaw.cv_iter(c);
+        CH c = *meshRaw.c_iter();
+        VH v = *meshRaw.cv_iter(c);
 
         meshProps.ref<CHART>(c).at(v)[0] += delta;
         ASSERT_EQ(init.initTransitions(), SingularityInitializer::SUCCESS);
@@ -50,8 +50,8 @@ class InitializingFailureTest : public InitializingTest
 
         // Test for inaccurate singularities getting detected
         init.initTransitions();
-        OVM::EdgeHandle eSing = anySingularEdge();
-        auto cSing = *meshRaw.ec_iter(eSing);
+        EH eSing = anySingularEdge();
+        CH cSing = *meshRaw.ec_iter(eSing);
         auto evs = meshRaw.edge_vertices(eSing);
         int coordEqual = -1;
         for (int i = 0; i < 3; i++)
@@ -68,11 +68,12 @@ class InitializingFailureTest : public InitializingTest
         // Test for bad transition
         init.initTransitions();
 
-        for (auto f : meshRaw.faces())
-            if (!meshRaw.is_boundary(f) && !(meshProps.hfTransition(meshRaw.halfface_handle(f, 0)) == Transition()))
+        for (FH f : meshRaw.faces())
+            if (!meshRaw.is_boundary(f)
+                && !(meshProps.hfTransition<TRANSITION>(meshRaw.halfface_handle(f, 0)) == Transition()))
             {
-                meshProps.setTransition(meshRaw.halfface_handle(f, 0),
-                                        Transition(Vec3i{3, 1, 2}, Vec3Q{1e-4, 1e-4, 1e-4}));
+                meshProps.setTransition<TRANSITION>(meshRaw.halfface_handle(f, 0),
+                                                    Transition(Vec3i{3, 1, 2}, Vec3Q{1e-4, 1e-4, 1e-4}));
                 break;
             }
         ASSERT_NE(init.initSingularities(), SingularityInitializer::SUCCESS);
@@ -93,11 +94,12 @@ class InitializingSuccessTest : public InitializingTest
         ASSERT_FALSE(meshProps.isAllocated<IS_WALL>());
         ASSERT_FALSE(meshProps.isAllocated<WALL_DIST>());
         assertValidTransitions();
-        for (auto hf : meshRaw.halffaces())
-            ASSERT_TRUE(meshProps.hfTransition(hf)
-                            .chain(meshProps.hfTransition(meshRaw.opposite_halfface_handle(hf)))
+        for (HFH hf : meshRaw.halffaces())
+            ASSERT_TRUE(meshProps.hfTransition<TRANSITION>(hf)
+                            .chain(meshProps.hfTransition<TRANSITION>(meshRaw.opposite_halfface_handle(hf)))
                             .isIdentity());
         ASSERT_EQ(init.initSingularities(), SingularityInitializer::SUCCESS);
+        ASSERT_EQ(init.makeFeaturesConsistent(), SingularityInitializer::SUCCESS);
         ASSERT_TRUE(meshProps.isAllocated<CHART>());
         ASSERT_TRUE(meshProps.isAllocated<TRANSITION>());
         ASSERT_TRUE(meshProps.isAllocated<IS_SINGULAR>());
@@ -128,6 +130,4 @@ INSTANTIATE_TEST_SUITE_P(ForEachValidDequantizedModel,
                          InitializingSuccessTest,
                          ::testing::ValuesIn(dequantizedModelNames));
 
-INSTANTIATE_TEST_SUITE_P(ForEachValidAlgohexModel,
-                         InitializingSuccessTest,
-                         ::testing::ValuesIn(algohexModelNames));
+INSTANTIATE_TEST_SUITE_P(ForEachValidAlgohexModel, InitializingSuccessTest, ::testing::ValuesIn(algohexModelNames));

@@ -51,6 +51,20 @@ class Writer : public TetMeshNavigator
      */
     RetCode writeSeamlessParamAndWalls();
 
+    /**
+     * @brief Write integer grid map to specified file in hexex format
+     *
+     * @return RetCode SUCCESS or errorcode
+     */
+    RetCode writeIGM();
+
+    /**
+     * @brief Write integer grid map to specified file in hexex format
+     *
+     * @return RetCode SUCCESS or errorcode
+     */
+    RetCode writeIGMAndWalls();
+
   private:
     const std::string _fileName;
     std::ofstream _os;
@@ -75,9 +89,10 @@ class Writer : public TetMeshNavigator
     /**
      * @brief Write tets and charts to internal stream
      *
+     * @param igm IN: whether to write IGM instead of
      * @return RetCode SUCCESS or MISSING_CHART
      */
-    RetCode writeTetsAndCharts();
+    RetCode writeTetsAndCharts(bool igm = false);
 
     /**
      * @brief Write wall faces to internal stream
@@ -85,6 +100,13 @@ class Writer : public TetMeshNavigator
      * @return RetCode SUCCESS or MISSING_WALLS
      */
     RetCode writeWalls();
+
+    /**
+     * @brief Write features faces to internal stream
+     *
+     * @return RetCode SUCCESS
+     */
+    RetCode writeFeatures();
 };
 
 } // namespace mc3d

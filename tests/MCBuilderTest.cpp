@@ -20,6 +20,7 @@ class MCBuilderTest : public FullToolChainTest
         ASSERT_EQ(reader.readSeamlessParamWithWalls(), Reader::SUCCESS);
         ASSERT_EQ(init.initTransitions(), SingularityInitializer::SUCCESS);
         ASSERT_EQ(init.initSingularities(), SingularityInitializer::SUCCESS);
+        ASSERT_EQ(init.makeFeaturesConsistent(), SingularityInitializer::SUCCESS);
 
         ASSERT_FALSE(meshProps.isAllocated<CHILD_EDGES>());
         ASSERT_FALSE(meshProps.isAllocated<CHILD_CELLS>());
@@ -42,7 +43,7 @@ class MCBuilderFailureTest1 : public MCBuilderTest
         MCBuilderTest::SetUp();
 
         // Remove one wallface
-        for (auto f: meshRaw.faces())
+        for (FH f: meshRaw.faces())
         {
             if (meshProps.get<IS_WALL>(f))
             {
@@ -66,7 +67,7 @@ class MCBuilderFailureTest2 : public MCBuilderTest
         MCBuilderTest::SetUp();
 
         // Add one wallface
-        for (auto f: meshRaw.faces())
+        for (FH f: meshRaw.faces())
         {
             if (!meshProps.isBlockBoundary(f))
             {

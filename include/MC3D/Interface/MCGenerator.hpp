@@ -32,12 +32,12 @@ class MCGenerator : public TetMeshManipulator
      * @brief Trace the motorcycle complex for the given mesh.
      *
      * Requires properties: CHART.
-     * Temporarily allocates properties: IS_ORIGINAL, MC_BLOCK_ID, MC_BLOCK_DATA
+     * Temporarily allocates properties: IS_ORIGINAL_F, MC_BLOCK_ID, MC_BLOCK_DATA
      * Allocates properties: IS_SINGULAR, TRANSITION, IS_WALL, IS_ARC, WALL_DIST, CHILD_CELLS, CHILD_EDGES, CHILD_FACES,
      *                       MC_MESH_PROPS, MC_BLOCK, MC_PATCH, MC_ARC, MC_NODE
      * Allocates all MCMesh properties.
      *
-     * If keepOrigProps is true, allocates CHART_ORIG, TRANSITION_ORIG, IS_ORIGINAL_VTX
+     * If keepOrigProps is true, allocates CHART_ORIG, TRANSITION_ORIG, IS_ORIGINAL_V
      *
      * @param splitTori IN: whether to split toroidal blocks
      * @param splitSelfadjacency IN: whether to split self-adjacent blocks
@@ -51,12 +51,12 @@ class MCGenerator : public TetMeshManipulator
      * @brief Reduce the motorcycle complex for the given mesh.
      *
      * Requires properties: CHART, IS_SINGULAR, TRANSITION.
-     * Temporarily allocates properties: IS_ORIGINAL, MC_BLOCK_ID, MC_BLOCK_DATA
+     * Temporarily allocates properties: IS_ORIGINAL_F, MC_BLOCK_ID, MC_BLOCK_DATA
      * Allocates properties: IS_WALL, IS_ARC, WALL_DIST, CHILD_CELLS, CHILD_EDGES, CHILD_FACES, MC_MESH_PROPS,
      *                       MC_BLOCK, MC_PATCH, MC_ARC, MC_NODE
      * Allocates all MCMesh properties.
      *
-     * @param preserveSingularWalls IN: whether to keep all walls around singularities
+     * @param splitTori IN: whether to split toroidal blocks
      * @param splitSelfadjacency IN: whether to split self-adjacent blocks
      * @param preserveFeatures IN: whether to prevent removal at feature elements
      * @return RetCode SUCCESS or errorcode

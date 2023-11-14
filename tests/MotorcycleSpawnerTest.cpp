@@ -1,7 +1,7 @@
 #include "./TestUtils.hpp"
 
-#include "MC3D/Algorithm/SingularityInitializer.hpp"
 #include "MC3D/Algorithm/MotorcycleSpawner.hpp"
+#include "MC3D/Algorithm/SingularityInitializer.hpp"
 
 #include <fstream>
 #include <limits>
@@ -20,11 +20,9 @@ class MotorcycleSpawningTest : public FullToolChainTest
         ASSERT_EQ(reader.readSeamlessParam(), Reader::SUCCESS);
         ASSERT_EQ(init.initTransitions(), SingularityInitializer::SUCCESS);
         ASSERT_EQ(init.initSingularities(), SingularityInitializer::SUCCESS);
+        ASSERT_EQ(init.makeFeaturesConsistent(), SingularityInitializer::SUCCESS);
 
         meshProps.allocate<IS_WALL>();
-        meshProps.allocate<IS_ORIGINAL>();
-        for (auto f: meshRaw.faces())
-            meshProps.set<IS_ORIGINAL>(f, true);
         meshProps.allocate<WALL_DIST>();
         meshProps.allocate<CHILD_CELLS>();
         meshProps.allocate<CHILD_EDGES>();
@@ -51,15 +49,14 @@ class MotorcycleSpawningFailureTest : public MotorcycleSpawningTest
     {
         MotorcycleSpawningTest::SetUp();
 
-        OVM::EdgeHandle eSing = anySingularEdge();
-        auto cSing = *meshRaw.ec_iter(eSing);
+        EH eSing = anySingularEdge();
+        CH cSing = *meshRaw.ec_iter(eSing);
         auto evs = meshRaw.edge_vertices(eSing);
         int coordEqual = -1;
         for (int i = 0; i < 3; i++)
             if (meshProps.get<CHART>(cSing).at(evs[0])[i] == meshProps.get<CHART>(cSing).at(evs[1])[i])
                 coordEqual = i;
         meshProps.ref<CHART>(cSing).at(evs[0])[coordEqual] += 1e-4;
-
     }
 
     void run()
@@ -74,12 +71,13 @@ class MotorcycleSpawningSuccessTest : public MotorcycleSpawningTest
     void run()
     {
         ASSERT_EQ(spawner.spawnSingularityMotorcycles(), MotorcycleSpawner::SUCCESS);
-        set<OVM::EdgeHandle> singularEdges;
-        for (auto e: meshRaw.edges())
-            if (meshProps.get<IS_SINGULAR>(e))
+        set<EH> singularEdges;
+        for (EH e : meshRaw.edges())
+            if (meshProps.get<IS_SINGULAR>(e)
+                && (!meshRaw.is_boundary(e) || std::round(spawner.totalDihedralAngleUVW(e) / M_PI_2) == 0))
                 singularEdges.insert(e);
 
-        set<OVM::EdgeHandle> edgesWithMotorcycle;
+        set<EH> edgesWithMotorcycle;
 
         MotorcycleQueue copy(mQ);
         while (!copy.empty())
@@ -108,9 +106,7 @@ TEST_P(MotorcycleSpawningSuccessTest, ItSucceeds)
     run();
 }
 
-INSTANTIATE_TEST_SUITE_P(ForTheMinimalModel,
-                         MotorcycleSpawningSuccessTest,
-                         ::testing::ValuesIn(minimalModelNames));
+INSTANTIATE_TEST_SUITE_P(ForTheMinimalModel, MotorcycleSpawningSuccessTest, ::testing::ValuesIn(minimalModelNames));
 
 INSTANTIATE_TEST_SUITE_P(ForEachValidQuantizedModel,
                          MotorcycleSpawningSuccessTest,

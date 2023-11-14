@@ -24,14 +24,14 @@ class MCBuilder : public virtual TetMeshManipulator
         FORBIDDEN_SELFADJACENCY = 17, // Selfadjacent blocks forbidden by the user but still present in the MC
     };
 
-    const static OVM::EdgeHandle UNASSIGNED_CIRCULAR_ARC; // Used as MC_ARC property for non-representable circular arc
-    const static OVM::FaceHandle
+    const static EH UNASSIGNED_CIRCULAR_ARC; // Used as MC_ARC property for non-representable circular arc
+    const static FH
         UNASSIGNED_ANNULAR_PATCH; // Used as MC_PATCH property for non-representable annular patch
-    const static OVM::CellHandle
+    const static CH
         UNASSIGNED_TOROIDAL_BLOCK_U; // Used as MC_BLOCK property for non-representable toroidal block (axis U)
-    const static OVM::CellHandle
+    const static CH
         UNASSIGNED_TOROIDAL_BLOCK_V; // Used as MC_BLOCK property for non-representable toroidal block (axis V)
-    const static OVM::CellHandle
+    const static CH
         UNASSIGNED_TOROIDAL_BLOCK_W; // Used as MC_BLOCK property for non-representable toroidal block (axis W)
 
     /**
@@ -61,7 +61,7 @@ class MCBuilder : public virtual TetMeshManipulator
      * @param tetStart IN: Tet from which to start floodfilling
      * @return RetCode SUCCESS or INVALID_WALLS
      */
-    RetCode updateSingleBlock(const OVM::CellHandle& tetStart);
+    RetCode updateSingleBlock(const CH& tetStart);
 
     /**
      * @brief Actually connects the mapped elements to form an MC meta mesh.
@@ -107,7 +107,7 @@ class MCBuilder : public virtual TetMeshManipulator
      * @param blockData OUT: element data of floodfilled block is stored here
      * @return RetCode SUCCESS or INVALID_WALLS
      */
-    RetCode gatherBlockData(const OVM::CellHandle& tetStart, vector<bool>& tetVisited, BlockData& blockData);
+    RetCode gatherBlockData(const CH& tetStart, vector<bool>& tetVisited, BlockData& blockData);
 
     /**
      * @brief Create the individual MC mesh elements needed to represent the MC and map them to

@@ -17,7 +17,7 @@ Reader::Reader(TetMeshProps& meshProps, const std::string& fileName, bool forceS
 
 Reader::RetCode Reader::readSeamlessParam()
 {
-    _meshProps.mesh.clear(false);
+    meshProps().mesh().clear(false);
 
     auto ret = checkFile();
     if (ret != SUCCESS)
@@ -28,14 +28,14 @@ Reader::RetCode Reader::readSeamlessParam()
     ret = readVertices();
     if (ret != SUCCESS)
     {
-        _meshProps.mesh.clear(false);
+        meshProps().mesh().clear(false);
         return ret;
     }
     ret = readTetsAndCharts();
     if (ret != SUCCESS && ret != INVALID_CHART)
     {
-        _meshProps.mesh.clear(false);
-        _meshProps.release<CHART>();
+        meshProps().mesh().clear(false);
+        meshProps().release<CHART>();
         return ret;
     }
 
@@ -44,12 +44,12 @@ Reader::RetCode Reader::readSeamlessParam()
         ret = readFeatures();
         if (ret != SUCCESS)
         {
-            if (_meshProps.isAllocated<IS_FEATURE_V>())
-                _meshProps.release<IS_FEATURE_V>();
-            if (_meshProps.isAllocated<IS_FEATURE_E>())
-                _meshProps.release<IS_FEATURE_E>();
-            if (_meshProps.isAllocated<IS_FEATURE_F>())
-                _meshProps.release<IS_FEATURE_F>();
+            if (meshProps().isAllocated<IS_FEATURE_V>())
+                meshProps().release<IS_FEATURE_V>();
+            if (meshProps().isAllocated<IS_FEATURE_E>())
+                meshProps().release<IS_FEATURE_E>();
+            if (meshProps().isAllocated<IS_FEATURE_F>())
+                meshProps().release<IS_FEATURE_F>();
             return ret;
         }
         ret = sanitizeInput();
@@ -62,7 +62,7 @@ Reader::RetCode Reader::readSeamlessParam()
 
 Reader::RetCode Reader::readSeamlessParamWithWalls()
 {
-    _meshProps.mesh.clear(false);
+    meshProps().mesh().clear(false);
 
     auto ret = checkFile();
     if (ret != SUCCESS)
@@ -73,14 +73,14 @@ Reader::RetCode Reader::readSeamlessParamWithWalls()
     ret = readVertices();
     if (ret != SUCCESS)
     {
-        _meshProps.mesh.clear(false);
+        meshProps().mesh().clear(false);
         return ret;
     }
     ret = readTetsAndCharts();
     if (ret != SUCCESS && ret != INVALID_CHART)
     {
-        _meshProps.mesh.clear(false);
-        _meshProps.release<CHART>();
+        meshProps().mesh().clear(false);
+        meshProps().release<CHART>();
         return ret;
     }
 
@@ -89,19 +89,19 @@ Reader::RetCode Reader::readSeamlessParamWithWalls()
         ret = readWalls();
         if (ret != SUCCESS)
         {
-            _meshProps.mesh.clear(false);
-            _meshProps.release<IS_WALL>();
+            meshProps().mesh().clear(false);
+            meshProps().release<IS_WALL>();
             return ret;
         }
         ret = readFeatures();
         if (ret != SUCCESS)
         {
-            if (_meshProps.isAllocated<IS_FEATURE_V>())
-                _meshProps.release<IS_FEATURE_V>();
-            if (_meshProps.isAllocated<IS_FEATURE_E>())
-                _meshProps.release<IS_FEATURE_E>();
-            if (_meshProps.isAllocated<IS_FEATURE_F>())
-                _meshProps.release<IS_FEATURE_F>();
+            if (meshProps().isAllocated<IS_FEATURE_V>())
+                meshProps().release<IS_FEATURE_V>();
+            if (meshProps().isAllocated<IS_FEATURE_E>())
+                meshProps().release<IS_FEATURE_E>();
+            if (meshProps().isAllocated<IS_FEATURE_F>())
+                meshProps().release<IS_FEATURE_F>();
             return ret;
         }
         ret = sanitizeInput();
@@ -126,7 +126,7 @@ Reader::RetCode Reader::checkFile()
 
 Reader::RetCode Reader::readVertices()
 {
-    TetMesh& tetMesh = _meshProps.mesh;
+    TetMesh& tetMesh = meshProps().mesh();
 
     int NV = 0;
     _is >> NV;
@@ -148,16 +148,19 @@ Reader::RetCode Reader::readVertices()
         }
         tetMesh.add_vertex(Vec3d(x, y, z));
     }
+    meshProps().allocate<IS_ORIGINAL_V>(false);
+    for (VH v : tetMesh.vertices())
+        meshProps().set<IS_ORIGINAL_V>(v, true);
 
     return SUCCESS;
 }
 
 Reader::RetCode Reader::readTetsAndCharts()
 {
-    TetMesh& tetMesh = _meshProps.mesh;
+    TetMesh& tetMesh = meshProps().mesh();
 
     // Property allocation
-    _meshProps.allocate<CHART>();
+    meshProps().allocate<CHART>();
 
     int NC = 0;
     _is >> NC;
@@ -188,12 +191,9 @@ Reader::RetCode Reader::readTetsAndCharts()
             }
         }
 
-        OVM::CellHandle tet = tetMesh.add_cell({OVM::VertexHandle{vtx[0]},
-                                                OVM::VertexHandle{vtx[1]},
-                                                OVM::VertexHandle{vtx[2]},
-                                                OVM::VertexHandle{vtx[3]}});
+        CH tet = tetMesh.add_cell({VH{vtx[0]}, VH{vtx[1]}, VH{vtx[2]}, VH{vtx[3]}});
         assert(tet.is_valid());
-        auto& newChart = _meshProps.ref<CHART>(tet);
+        auto& newChart = meshProps().ref<CHART>(tet);
         for (int corner = 0; corner < 4; corner++)
         {
             std::string uvw[3];
@@ -235,32 +235,44 @@ Reader::RetCode Reader::readTetsAndCharts()
                     uvwQ[i] = Q(uvw[i]);
                 }
             }
-            newChart[OVM::VertexHandle{vtx[corner]}] = uvwQ;
+            newChart[VH{vtx[corner]}] = uvwQ;
         }
     }
 
     // Check charts
     bool invalidCharts = false;
-    for (auto tet : tetMesh.cells())
+    for (CH tet : tetMesh.cells())
     {
-        if (volumeUVW(tet) == 0)
+        double vol = doubleVolumeUVW(tet);
+        if (vol <= 1e-6)
         {
-            LOG(ERROR) << "Degenerate (UVW) tet " << tet << " in " << _fileName;
-            invalidCharts = true;
-        }
-        else if (volumeUVW(tet) < 0)
-        {
-            LOG(ERROR) << "Flipped (UVW) tet " << tet << " in " << _fileName;
-            invalidCharts = true;
+            Q volQ = rationalVolumeUVW(tet);
+            if (volQ == 0)
+            {
+                LOG(ERROR) << "Degenerate (UVW) tet " << tet << " in " << _fileName;
+                invalidCharts = true;
+            }
+            else if (volQ < 0)
+            {
+                LOG(ERROR) << "Flipped (UVW) tet " << tet << "(" << volQ.get_d() << " in " << _fileName;
+                invalidCharts = true;
+            }
         }
     }
+
+    meshProps().allocate<IS_ORIGINAL_E>(false);
+    for (EH e : tetMesh.edges())
+        meshProps().set<IS_ORIGINAL_E>(e, true);
+    meshProps().allocate<IS_ORIGINAL_F>(false);
+    for (FH f : tetMesh.faces())
+        meshProps().set<IS_ORIGINAL_F>(f, true);
 
     return invalidCharts ? INVALID_CHART : SUCCESS;
 }
 
 Reader::RetCode Reader::readFeatures()
 {
-    TetMesh& tetMesh = _meshProps.mesh;
+    TetMesh& tetMesh = meshProps().mesh();
 
     int n_ftv(0), n_fte(0), n_ftf(0);
 
@@ -285,12 +297,12 @@ Reader::RetCode Reader::readFeatures()
     // Property allocation
     LOG(INFO) << "read #feature_vertices = " << n_ftv << ", read #feature_edges = " << n_fte
               << ", read #feature_faces = " << n_ftf << std::endl;
-    if (n_ftv > 0 && !_meshProps.isAllocated<IS_FEATURE_V>())
-        _meshProps.allocate<IS_FEATURE_V>(false);
-    if (n_fte > 0 && !_meshProps.isAllocated<IS_FEATURE_E>())
-        _meshProps.allocate<IS_FEATURE_E>(false);
-    if (n_ftf > 0 && !_meshProps.isAllocated<IS_FEATURE_F>())
-        _meshProps.allocate<IS_FEATURE_F>(false);
+    if (n_ftv > 0 && !meshProps().isAllocated<IS_FEATURE_V>())
+        meshProps().allocate<IS_FEATURE_V>(0);
+    if (n_fte > 0 && !meshProps().isAllocated<IS_FEATURE_E>())
+        meshProps().allocate<IS_FEATURE_E>(0);
+    if (n_ftf > 0 && !meshProps().isAllocated<IS_FEATURE_F>())
+        meshProps().allocate<IS_FEATURE_F>(0);
 
     for (int i = 0; i < n_ftv; ++i)
     {
@@ -301,7 +313,11 @@ Reader::RetCode Reader::readFeatures()
             LOG(INFO) << "Error reading features";
             return INVALID_WALLS;
         }
-        _meshProps.set<IS_FEATURE_V>(OVM::VertexHandle(vidx), true);
+        meshProps().set<IS_FEATURE_V>(VH(vidx), true);
+        // TODO change file format
+        // int feature = 0;
+        // _is >> feature;
+        // meshProps().set<IS_FEATURE_V>(VH(vidx), feature);
     }
 
     for (int i = 0; i < n_fte; ++i)
@@ -314,14 +330,17 @@ Reader::RetCode Reader::readFeatures()
             return INVALID_WALLS;
         }
 
-        OVM::HalfEdgeHandle heh = tetMesh.find_halfedge(OVM::VertexHandle(v0idx), OVM::VertexHandle(v1idx));
-        if (!heh.is_valid())
+        HEH he = tetMesh.find_halfedge(VH(v0idx), VH(v1idx));
+        if (!he.is_valid())
         {
             LOG(INFO) << "Error reading feature edges";
             return INVALID_WALLS;
         }
-        auto eh = tetMesh.edge_handle(heh);
-        _meshProps.set<IS_FEATURE_E>(eh, true);
+        EH e = tetMesh.edge_handle(he);
+        meshProps().set<IS_FEATURE_E>(e, true);
+        // int feature = 0;
+        // _is >> feature;
+        // meshProps().set<IS_FEATURE_E>(e, feature);
     }
 
     for (int i = 0; i < n_ftf; ++i)
@@ -335,20 +354,63 @@ Reader::RetCode Reader::readFeatures()
         }
 
         // map vertex indices
-        std::vector<OVM::VertexHandle> vhs;
-        vhs.push_back(OVM::VertexHandle(v0idx));
-        vhs.push_back(OVM::VertexHandle(v1idx));
-        vhs.push_back(OVM::VertexHandle(v2idx));
+        std::vector<VH> vhs;
+        vhs.push_back(VH(v0idx));
+        vhs.push_back(VH(v1idx));
+        vhs.push_back(VH(v2idx));
 
         // get corresponding halfface in original mesh
-        OVM::HalfFaceHandle hfh = tetMesh.find_halfface(vhs);
+        HFH hfh = tetMesh.find_halfface(vhs);
         if (!hfh.is_valid())
         {
             LOG(INFO) << "Error reading features";
             return INVALID_WALLS;
         }
-        OVM::FaceHandle fh = tetMesh.face_handle(hfh);
-        _meshProps.set<IS_FEATURE_F>(fh, true);
+        FH fh = tetMesh.face_handle(hfh);
+        meshProps().set<IS_FEATURE_F>(fh, true);
+        // int feature = 0;
+        // _is >> feature;
+        // meshProps().set<IS_FEATURE_F>(fh, feature);
+    }
+
+    // Make features consistent
+    if (meshProps().isAllocated<IS_FEATURE_F>())
+    {
+        if (!meshProps().isAllocated<IS_FEATURE_E>())
+            meshProps().allocate<IS_FEATURE_E>(0);
+        // Make features consistent:
+        // Mark each edge that has != 0 or != 2 feature patches as feature
+        for (EH e : tetMesh.edges())
+        {
+            if (meshProps().get<IS_FEATURE_E>(e))
+                continue;
+
+            int nFeatureFaces = 0;
+            for (FH f : tetMesh.edge_faces(e))
+                if (meshProps().get<IS_FEATURE_F>(f))
+                    nFeatureFaces++;
+            if (nFeatureFaces != 2 && nFeatureFaces != 0)
+                meshProps().set<IS_FEATURE_E>(e, INT_MAX);
+        }
+    }
+
+    if (meshProps().isAllocated<IS_FEATURE_E>())
+    {
+        if (!meshProps().isAllocated<IS_FEATURE_V>())
+            meshProps().allocate<IS_FEATURE_V>(0);
+        // Mark each vertex that has != 0 or != 2 feature edges as feature
+        for (VH v : tetMesh.vertices())
+        {
+            if (meshProps().get<IS_FEATURE_V>(v))
+                continue;
+
+            int nFeatureEdges = 0;
+            for (EH e : tetMesh.vertex_edges(v))
+                if (meshProps().get<IS_FEATURE_E>(e))
+                    nFeatureEdges++;
+            if (nFeatureEdges != 2 && nFeatureEdges != 0)
+                meshProps().set<IS_FEATURE_V>(v, INT_MAX);
+        }
     }
 
     return SUCCESS;
@@ -356,11 +418,11 @@ Reader::RetCode Reader::readFeatures()
 
 Reader::RetCode Reader::readWalls()
 {
-    TetMesh& tetMesh = _meshProps.mesh;
+    TetMesh& tetMesh = meshProps().mesh();
 
     // Property allocation
-    _meshProps.allocate<IS_WALL>(false);
-    _meshProps.allocate<WALL_DIST>(0.0);
+    meshProps().allocate<IS_WALL>(false);
+    meshProps().allocate<WALL_DIST>(0.0);
 
     int NW = 0;
     _is >> NW;
@@ -375,26 +437,26 @@ Reader::RetCode Reader::readWalls()
     {
         std::vector<int> idx(3);
         _is >> idx[0] >> idx[1] >> idx[2];
-        OVM::VertexHandle v0(idx[0]);
-        OVM::VertexHandle v1(idx[1]);
-        OVM::VertexHandle v2(idx[2]);
+        VH v0(idx[0]);
+        VH v1(idx[1]);
+        VH v2(idx[2]);
 
-        float wallDist;
+        double wallDist;
         _is >> wallDist;
         if (!_is.good())
         {
-            LOG(ERROR) << "Could not read number of walls in file " << _fileName;
+            LOG(ERROR) << "Could not read wall dist of wall " << i << " in file " << _fileName;
             return MISSING_WALLS;
         }
 
-        OVM::FaceHandle f = tetMesh.face_handle(tetMesh.find_halfface({v0, v1, v2}));
+        FH f = tetMesh.face_handle(tetMesh.find_halfface({v0, v1, v2}));
         if (!f.is_valid())
         {
             LOG(ERROR) << "Faulty wall face in file " << _fileName;
             return INVALID_WALLS;
         }
-        _meshProps.set<IS_WALL>(f, true);
-        _meshProps.set<WALL_DIST>(f, wallDist);
+        meshProps().set<IS_WALL>(f, true);
+        meshProps().set<WALL_DIST>(f, wallDist);
     }
 
     return SUCCESS;
@@ -413,29 +475,29 @@ Reader::RetCode Reader::sanitizeInput()
         else
             LOG(INFO) << "Seamless parametrization was read in floating point format, sanitizing...";
 
-        TetMesh& tetMesh = _meshProps.mesh;
+        TetMesh& tetMesh = meshProps().mesh();
 
         TS3D::TrulySeamless3D sanitizer(tetMesh);
-        for (auto tet : tetMesh.cells())
-            for (auto v : tetMesh.tet_vertices(tet))
-                sanitizer.setParam(tet, v, Vec3Q2d(_meshProps.ref<CHART>(tet).at(v)));
+        for (CH tet : tetMesh.cells())
+            for (VH v : tetMesh.tet_vertices(tet))
+                sanitizer.setParam(tet, v, Vec3Q2d(meshProps().ref<CHART>(tet).at(v)));
 
-        if (_meshProps.isAllocated<IS_FEATURE_E>())
+        if (meshProps().isAllocated<IS_FEATURE_E>())
         {
-            for (auto e : tetMesh.edges())
-                if (_meshProps.get<IS_FEATURE_E>(e))
+            for (EH e : tetMesh.edges())
+                if (meshProps().get<IS_FEATURE_E>(e))
                     sanitizer.setFeature(e);
         }
-        if (_meshProps.isAllocated<IS_FEATURE_V>())
+        if (meshProps().isAllocated<IS_FEATURE_V>())
         {
-            for (auto v : tetMesh.vertices())
-                if (_meshProps.get<IS_FEATURE_V>(v))
+            for (VH v : tetMesh.vertices())
+                if (meshProps().get<IS_FEATURE_V>(v))
                     sanitizer.setFeature(v);
         }
-        if (_meshProps.isAllocated<IS_FEATURE_F>())
+        if (meshProps().isAllocated<IS_FEATURE_F>())
         {
-            for (auto f : tetMesh.faces())
-                if (_meshProps.get<IS_FEATURE_F>(f))
+            for (FH f : tetMesh.faces())
+                if (meshProps().get<IS_FEATURE_F>(f))
                     sanitizer.setFeature(f);
         }
 
@@ -453,9 +515,9 @@ Reader::RetCode Reader::sanitizeInput()
             return INVALID_CHART;
         }
 
-        for (auto tet : tetMesh.cells())
-            for (auto v : tetMesh.tet_vertices(tet))
-                _meshProps.ref<CHART>(tet).at(v) = sanitizer.getParam(tet, v);
+        for (CH tet : tetMesh.cells())
+            for (VH v : tetMesh.tet_vertices(tet))
+                meshProps().ref<CHART>(tet).at(v) = sanitizer.getParam(tet, v);
 
         LOG(INFO) << "Sanitization successful";
     }

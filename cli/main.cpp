@@ -6,6 +6,7 @@
 #include <MC3D/Algorithm/MotorcycleSpawner.hpp>
 #include <MC3D/Algorithm/MotorcycleTracer.hpp>
 #include <MC3D/Algorithm/SingularityInitializer.hpp>
+#include <MC3D/Algorithm/TetRemesher.hpp>
 
 #include <CLI/CLI.hpp>
 
@@ -101,9 +102,9 @@ int main(int argc, char** argv)
         meshProps.allocate<CHILD_CELLS>({});
         meshProps.allocate<CHILD_EDGES>({});
         meshProps.allocate<CHILD_FACES>({});
-        meshProps.allocate<IS_ORIGINAL>(false); // Default value = false (for future added elements)
+        meshProps.allocate<IS_ORIGINAL_F>(false); // Default value = false (for future added elements)
         for (auto f : meshRaw.faces())
-            meshProps.set<IS_ORIGINAL>(f, true); // Only current faces are original
+            meshProps.set<IS_ORIGINAL_F>(f, true); // Only current faces are original
 
         // For advanced usage, the library provides specialized classes for each algorithmic step
         SingularityInitializer init(meshProps);
@@ -154,6 +155,7 @@ int main(int argc, char** argv)
 
     if (!outputFile.empty())
     {
+        TetRemesher(meshProps).collapseAllPossibleEdges(true, true, true, false);
         Writer writer(meshProps, outputFile, exactOutput);
         ASSERT_SUCCESS("Writing output", writer.writeSeamlessParamAndWalls());
     }

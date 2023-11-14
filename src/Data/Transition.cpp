@@ -2,7 +2,7 @@
 
 namespace mc3d
 {
-const set<Vec3i> Transition::OCTAHEDRAL_GROUP_ROT{
+const vector<Vec3i> Transition::OCTAHEDRAL_GROUP_ROT{
     Vec3i{1, 2, 3},   Vec3i{1, -2, -3},  Vec3i{-1, 2, -3},  Vec3i{-1, -2, 3},  Vec3i{1, -3, 2},  Vec3i{1, 3, -2},
     Vec3i{3, 2, -1},  Vec3i{-3, 2, 1},   Vec3i{-2, 1, 3},   Vec3i{2, -1, 3},   Vec3i{2, 1, -3},  Vec3i{-1, 3, 2},
     Vec3i{3, -2, 1},  Vec3i{-2, -1, -3}, Vec3i{-1, -3, -2}, Vec3i{-3, -2, -1}, Vec3i{3, 1, 2},   Vec3i{2, -3, -1},

@@ -8,7 +8,7 @@ namespace mc3d
 
 MCReducer::MCReducer(TetMeshProps& meshProps)
     : TetMeshNavigator(meshProps), TetMeshManipulator(meshProps), MCMeshNavigator(meshProps),
-      MCMeshManipulator(meshProps), _pQ{GreatestDistComp{_mcMeshProps}}
+      MCMeshManipulator(meshProps), _pQ{GreatestDistComp{mcMeshProps()}}
 {
 }
 
@@ -23,8 +23,25 @@ void MCReducer::init(bool preserveSingularPatches, bool avoidSelfadjacency, bool
         _pQ.pop();
 
     // Insert ALL patches here, as we have to check after each queue pop wether patch is still removable anyways
-    for (auto p : _mcMeshPropsC.mesh.faces())
+    for (FH p : mcMeshProps().mesh().faces())
         _pQ.push(p);
+
+    bool change = true;
+    while (change)
+    {
+        change = false;
+        set<VH> removableNodes;
+        for (VH n : mcMeshProps().mesh().vertices())
+            if (isRemovable(n))
+                removableNodes.insert(n);
+        set<EH> removableArcs;
+        for (EH a : mcMeshProps().mesh().edges())
+            if (isRemovable(a))
+                removableArcs.insert(a);
+        change = !removableArcs.empty() || !removableNodes.empty();
+        removeRemovableArcs(removableArcs, removableNodes);
+        removeRemovableNodes(removableNodes);
+    }
 
     // Always make sure the top queue element is a removable face, so removeNextPatch() is straightforward
     skipUnremovablePatches();
@@ -32,22 +49,34 @@ void MCReducer::init(bool preserveSingularPatches, bool avoidSelfadjacency, bool
 
 void MCReducer::removeNextPatch()
 {
-    auto p = _pQ.top();
+    FH p = _pQ.top();
     _pQ.pop();
 
-    MCMesh& mesh = _mcMeshProps.mesh;
+    MCMesh& mesh = mcMeshProps().mesh();
 
-    auto blocks = _mcMeshProps.mesh.face_cells(p);
+    auto blocks = mcMeshProps().mesh().face_cells(p);
     mergeBlocks(blocks[0], blocks[1], p);
 
-    set<OVM::EdgeHandle> updatedArcs;
-    for (auto a : mesh.face_edges(p))
+    set<EH> updatedArcs;
+    for (EH a : mesh.face_edges(p))
         updatedArcs.insert(a);
 
+    if (meshProps().isAllocated<TOUCHED>())
+    {
+        for (HFH hf : mcMeshProps().ref<PATCH_MESH_HALFFACES>(p))
+        {
+            for (VH v : meshProps().mesh().halfface_vertices(hf))
+            {
+                meshProps().set<TOUCHED>(v, true);
+                for (VH v2 : meshProps().mesh().vertex_vertices(v))
+                    meshProps().set<TOUCHED>(v2, true);
+            }
+        }
+    }
     deferredDeletePatch(p);
-    reembedAndResetProps(p, OVM::FaceHandle(-1));
+    reembedAndResetProps(p, FH(-1));
 
-    set<OVM::VertexHandle> updatedNodes;
+    set<VH> updatedNodes;
     removeRemovableArcs(updatedArcs, updatedNodes);
     removeRemovableNodes(updatedNodes);
 
@@ -59,7 +88,7 @@ void MCReducer::skipUnremovablePatches()
 {
     while (!_pQ.empty())
     {
-        auto p = _pQ.top();
+        FH p = _pQ.top();
         if (!isRemovable(p, _preserveSingularPatches, _avoidSelfadjacency, _preserveFeatures))
             _pQ.pop();
         else
@@ -67,25 +96,33 @@ void MCReducer::skipUnremovablePatches()
     }
 }
 
-void MCReducer::removeRemovableArcs(set<OVM::EdgeHandle>& possiblyRemovableArcs,
-                                    set<OVM::VertexHandle>& possiblyRemovableNodes)
+void MCReducer::removeRemovableArcs(set<EH>& possiblyRemovableArcs, set<VH>& possiblyRemovableNodes)
 {
-    MCMesh& mesh = _mcMeshProps.mesh;
-    for (auto a : possiblyRemovableArcs)
+    MCMesh& mesh = mcMeshProps().mesh();
+    for (EH a : possiblyRemovableArcs)
     {
         if (isRemovable(a))
         {
             auto itPair = mesh.edge_faces(a);
-            vector<OVM::FaceHandle> aPs(itPair.first, itPair.second);
+            vector<FH> aPs(itPair.first, itPair.second);
             assert(aPs.size() == 2);
-            set<OVM::CellHandle> affectedBs;
-            auto pMerged = mergePatches(aPs[0], aPs[1], a, affectedBs);
+            set<CH> affectedBs;
+            FH pMerged = mergePatches(aPs[0], aPs[1], a, affectedBs);
 
             possiblyRemovableNodes.insert(mesh.from_vertex_handle(mesh.halfedge_handle(a, 0)));
             possiblyRemovableNodes.insert(mesh.to_vertex_handle(mesh.halfedge_handle(a, 0)));
 
+            if (meshProps().isAllocated<TOUCHED>())
+            {
+                for (HEH he : mcMeshProps().ref<ARC_MESH_HALFEDGES>(a))
+                {
+                    meshProps().set<TOUCHED>(meshProps().mesh().from_vertex_handle(he), true);
+                    for (VH v2 : meshProps().mesh().vertex_vertices(meshProps().mesh().from_vertex_handle(he)))
+                        meshProps().set<TOUCHED>(v2, true);
+                }
+            }
             deferredDeleteArc(a);
-            reembedAndResetProps(a, OVM::EdgeHandle(-1));
+            reembedAndResetProps(a, EH(-1));
 
             _pQ.push(pMerged);
         }
@@ -93,25 +130,33 @@ void MCReducer::removeRemovableArcs(set<OVM::EdgeHandle>& possiblyRemovableArcs,
     possiblyRemovableArcs.clear();
 }
 
-void MCReducer::removeRemovableNodes(set<OVM::VertexHandle>& possiblyRemovableNodes)
+void MCReducer::removeRemovableNodes(set<VH>& possiblyRemovableNodes)
 {
-    MCMesh& mesh = _mcMeshProps.mesh;
-    for (auto n : possiblyRemovableNodes)
+    MCMesh& mesh = mcMeshProps().mesh();
+    for (VH n : possiblyRemovableNodes)
     {
         if (isRemovable(n))
         {
             auto itPair = mesh.vertex_edges(n);
-            vector<OVM::EdgeHandle> nAs(itPair.first, itPair.second);
+            vector<EH> nAs(itPair.first, itPair.second);
             assert(nAs.size() == 2);
-            set<OVM::FaceHandle> affectedPs;
-            set<OVM::CellHandle> affectedBs;
+            set<FH> affectedPs;
+            set<CH> affectedBs;
             mergeArcs(nAs[0], nAs[1], n, affectedPs, affectedBs);
 
-            for (auto p : affectedPs)
+            for (FH p : affectedPs)
                 _pQ.push(p);
 
+            if (meshProps().isAllocated<TOUCHED>())
+            {
+                VH v = mcMeshProps().get<NODE_MESH_VERTEX>(n);
+                meshProps().set<TOUCHED>(v, true);
+                for (VH v2 : meshProps().mesh().vertex_vertices(v))
+                    meshProps().set<TOUCHED>(v2, true);
+            }
+
             deferredDeleteNode(n);
-            reembedAndResetProps(n, OVM::VertexHandle(-1));
+            reembedAndResetProps(n, VH(-1));
         }
     }
     possiblyRemovableNodes.clear();
@@ -123,60 +168,59 @@ bool MCReducer::isReducible() const
     return !_pQ.empty();
 }
 
-bool MCReducer::isRemovable(const OVM::FaceHandle& p,
+bool MCReducer::isRemovable(const FH& p,
                             bool preserveSingularPatches,
                             bool avoidSelfadjacency,
                             bool preserveFeatures) const
 {
-    if (_mcMeshProps.mesh.is_deleted(p))
+    if (mcMeshProps().mesh().is_deleted(p))
         return false;
 
-    if (_mcMeshProps.mesh.is_boundary(p))
+    if (mcMeshProps().mesh().is_boundary(p))
         return false;
 
     if (preserveSingularPatches)
-        for (auto a : _mcMeshProps.mesh.face_edges(p))
-            if (_mcMeshProps.get<IS_SINGULAR>(a))
+        for (EH a : mcMeshProps().mesh().face_edges(p))
+            if (mcMeshProps().get<IS_SINGULAR>(a))
                 return false;
 
     if (preserveFeatures)
     {
         // Do not remove feature patch
-        if (_mcMeshPropsC.isAllocated<IS_FEATURE_F>() && _mcMeshPropsC.get<IS_FEATURE_F>(p))
+        if (mcMeshProps().isAllocated<IS_FEATURE_F>() && mcMeshProps().get<IS_FEATURE_F>(p))
             return false;
-
         // Do not remove patches incident on feature arcs
-        if (_mcMeshPropsC.isAllocated<IS_FEATURE_E>())
-            for (auto a : _mcMeshProps.mesh.face_edges(p))
-                if (_mcMeshProps.get<IS_FEATURE_E>(a))
+        if (mcMeshProps().isAllocated<IS_FEATURE_E>())
+            for (EH a : mcMeshProps().mesh().face_edges(p))
+                if (mcMeshProps().get<IS_FEATURE_E>(a))
                     return false;
 
         // Do not remove patches incident on feature nodes
-        if (_mcMeshPropsC.isAllocated<IS_FEATURE_V>())
-            for (auto n : _mcMeshProps.mesh.face_vertices(p))
-                if (_mcMeshProps.get<IS_FEATURE_V>(n))
+        if (mcMeshProps().isAllocated<IS_FEATURE_V>())
+            for (VH n : mcMeshProps().mesh().face_vertices(p))
+                if (mcMeshProps().get<IS_FEATURE_V>(n))
                     return false;
     }
 
     // Must not merge a selfadjacent block into a torus
-    auto cells = _mcMeshProps.mesh.face_cells(p);
+    auto cells = mcMeshProps().mesh().face_cells(p);
     if (cells[0] == cells[1])
         return false;
 
     if (avoidSelfadjacency)
     {
         // Must not merge two blocks adjacent via more than one side into a selfadjacent block
-        auto hps = _mcMeshProps.mesh.face_halffaces(p);
-        for (auto hp : _mcMeshProps.mesh.cell_halffaces(cells[0]))
+        auto hps = mcMeshProps().mesh().face_halffaces(p);
+        for (HFH hp : mcMeshProps().mesh().cell_halffaces(cells[0]))
             if (hp != hps[0]
-                && _mcMeshProps.mesh.incident_cell(_mcMeshProps.mesh.opposite_halfface_handle(hp)) == cells[1])
+                && mcMeshProps().mesh().incident_cell(mcMeshProps().mesh().opposite_halfface_handle(hp)) == cells[1])
                 return false;
     }
 
     // Must must not merge two blocks, that do not share exactly one cuboid face (aka whose union does not form a
     // cuboid)
-    for (const auto& cell : cells)
-        for (const auto& kv : _mcMeshProps.ref<BLOCK_FACE_PATCHES>(cell))
+    for (const CH& cell : cells)
+        for (const auto& kv : mcMeshProps().ref<BLOCK_FACE_PATCHES>(cell))
         {
             auto& ps = kv.second;
             if (ps.find(p) != ps.end() && ps.size() > 1)
@@ -186,24 +230,27 @@ bool MCReducer::isRemovable(const OVM::FaceHandle& p,
     return true;
 }
 
-bool MCReducer::isRemovable(const OVM::EdgeHandle& a) const
+bool MCReducer::isRemovable(const EH& a) const
 {
-    const MCMesh& mesh = _mcMeshProps.mesh;
+    const MCMesh& mesh = mcMeshProps().mesh();
     if (mesh.is_deleted(a))
         return false;
 
-    auto ha = mesh.halfedge_handle(a, 0);
+    if (mcMeshProps().isAllocated<IS_FEATURE_E>() && mcMeshProps().get<IS_FEATURE_E>(a))
+        return false;
+
+    HEH ha = mesh.halfedge_handle(a, 0);
 
     // Only 2 adjacent patches
     auto itPair = mesh.halfedge_halffaces(ha);
-    vector<OVM::HalfFaceHandle> hps(itPair.first, itPair.second);
+    vector<HFH> hps(itPair.first, itPair.second);
     if (hps.size() != 2 || mesh.face_handle(hps[0]) == mesh.face_handle(hps[1]))
         return false;
 
     // Is the only edge separating the 2 patches in this direction
-    auto haNext = mesh.next_halfedge_in_halfface(ha, hps[0]);
-    auto haPrev = mesh.prev_halfedge_in_halfface(ha, hps[0]);
-    for (auto haOther : mesh.halfface_halfedges(hps[1]))
+    HEH haNext = mesh.next_halfedge_in_halfface(ha, hps[0]);
+    HEH haPrev = mesh.prev_halfedge_in_halfface(ha, hps[0]);
+    for (HEH haOther : mesh.halfface_halfedges(hps[1]))
         if (haOther == haNext || haOther == haPrev)
             return false;
 
@@ -224,23 +271,26 @@ bool MCReducer::isRemovable(const OVM::EdgeHandle& a) const
     return true;
 }
 
-bool MCReducer::isRemovable(const OVM::VertexHandle& n) const
+bool MCReducer::isRemovable(const VH& n) const
 {
-    if (_mcMeshProps.mesh.is_deleted(n))
+    if (mcMeshProps().mesh().is_deleted(n))
+        return false;
+
+    if (mcMeshProps().isAllocated<IS_FEATURE_V>() && mcMeshProps().get<IS_FEATURE_V>(n))
         return false;
 
     // Node removable iff 2 different halfarcs incident to it
-    auto itPair = _mcMeshProps.mesh.outgoing_halfedges(n);
-    vector<OVM::HalfEdgeHandle> has(itPair.first, itPair.second);
-    return has.size() == 2 && has[0] != has[1] && _mcMeshProps.mesh.to_vertex_handle(has[0]) != n
-           && _mcMeshProps.mesh.to_vertex_handle(has[1]) != n;
+    auto itPair = mcMeshProps().mesh().outgoing_halfedges(n);
+    vector<HEH> has(itPair.first, itPair.second);
+    return has.size() == 2 && has[0] != has[1] && mcMeshProps().mesh().to_vertex_handle(has[0]) != n
+           && mcMeshProps().mesh().to_vertex_handle(has[1]) != n;
 }
 
 MCReducer::GreatestDistComp::GreatestDistComp(const MCMeshProps& mcMeshProps) : _mcMeshProps(mcMeshProps)
 {
 }
 
-bool MCReducer::GreatestDistComp::operator()(const OVM::FaceHandle& p1, const OVM::FaceHandle& p2) const
+bool MCReducer::GreatestDistComp::operator()(const FH& p1, const FH& p2) const
 {
     // When true is returned, p1 gets lower priority than p2
     return _mcMeshProps.get<PATCH_MIN_DIST>(p1) < _mcMeshProps.get<PATCH_MIN_DIST>(p2);

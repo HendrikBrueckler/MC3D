@@ -5,11 +5,11 @@
 namespace mc3d
 {
 
-const OVM::EdgeHandle MCBuilder::UNASSIGNED_CIRCULAR_ARC{-2};
-const OVM::FaceHandle MCBuilder::UNASSIGNED_ANNULAR_PATCH{-2};
-const OVM::CellHandle MCBuilder::UNASSIGNED_TOROIDAL_BLOCK_U{-2};
-const OVM::CellHandle MCBuilder::UNASSIGNED_TOROIDAL_BLOCK_V{-3};
-const OVM::CellHandle MCBuilder::UNASSIGNED_TOROIDAL_BLOCK_W{-4};
+const EH MCBuilder::UNASSIGNED_CIRCULAR_ARC{-2};
+const FH MCBuilder::UNASSIGNED_ANNULAR_PATCH{-2};
+const CH MCBuilder::UNASSIGNED_TOROIDAL_BLOCK_U{-2};
+const CH MCBuilder::UNASSIGNED_TOROIDAL_BLOCK_V{-3};
+const CH MCBuilder::UNASSIGNED_TOROIDAL_BLOCK_W{-4};
 
 MCBuilder::MCBuilder(TetMeshProps& meshProps) : TetMeshNavigator(meshProps), TetMeshManipulator(meshProps)
 {
@@ -17,15 +17,15 @@ MCBuilder::MCBuilder(TetMeshProps& meshProps) : TetMeshNavigator(meshProps), Tet
 
 MCBuilder::RetCode MCBuilder::discoverBlocks()
 {
-    _meshProps.allocate<IS_ARC>(false);
-    _meshProps.allocate<MC_BLOCK_ID>(-1);
-    _meshProps.allocate<MC_BLOCK_DATA>(map<int, BlockData>());
+    meshProps().allocate<IS_ARC>(false);
+    meshProps().allocate<MC_BLOCK_ID>(-1);
+    meshProps().allocate<MC_BLOCK_DATA>(map<int, BlockData>());
 
-    auto& blockId2data = _meshProps.ref<MC_BLOCK_DATA>();
+    auto& blockId2data = meshProps().ref<MC_BLOCK_DATA>();
 
-    vector<bool> tetVisited(_meshProps.mesh.n_cells(), false);
+    vector<bool> tetVisited(meshProps().mesh().n_cells(), false);
 
-    for (auto tetStart : _meshProps.mesh.cells())
+    for (CH tetStart : meshProps().mesh().cells())
     {
         if (!tetVisited[tetStart.idx()])
         {
@@ -41,14 +41,14 @@ MCBuilder::RetCode MCBuilder::discoverBlocks()
     }
 
     // Necessary, as removing singularity-walls can cause arcs that are not part of any block edges
-    for (auto e : _meshProps.mesh.edges())
+    for (EH e : meshProps().mesh().edges())
     {
         size_t nWalls = 0;
-        for (auto f : _meshProps.mesh.edge_faces(e))
-            if (_meshProps.isBlockBoundary(f))
+        for (FH f : meshProps().mesh().edge_faces(e))
+            if (meshProps().isBlockBoundary(f))
                 nWalls++;
         if (nWalls > 2)
-            _meshProps.set<IS_ARC>(e, true);
+            meshProps().set<IS_ARC>(e, true);
     }
 
     int nToroidal = nToroidalBlocks();
@@ -61,29 +61,29 @@ MCBuilder::RetCode MCBuilder::discoverBlocks()
 
 MCBuilder::RetCode MCBuilder::createAndMapElements()
 {
-    _isNode = vector<bool>(_meshProps.mesh.n_vertices(), false);
+    _isNode = vector<bool>(meshProps().mesh().n_vertices(), false);
     auto ret = createAndMapNodes();
     if (ret != SUCCESS)
     {
-        _meshProps.clearMC();
+        meshProps().clearMC();
         return ret;
     }
     ret = createAndMapArcs();
     if (ret != SUCCESS)
     {
-        _meshProps.clearMC();
+        meshProps().clearMC();
         return ret;
     }
     ret = createAndMapPatches();
     if (ret != SUCCESS)
     {
-        _meshProps.clearMC();
+        meshProps().clearMC();
         return ret;
     }
     ret = createAndMapBlocks();
     if (ret != SUCCESS)
     {
-        _meshProps.clearMC();
+        meshProps().clearMC();
         return ret;
     }
 
@@ -107,28 +107,27 @@ MCBuilder::RetCode MCBuilder::connectMCMesh(bool forbidTori, bool forbidSelfadja
         return FORBIDDEN_SELFADJACENCY;
     }
 
-    assert(_meshProps.get<MC_MESH_PROPS>() != nullptr);
-    _meshProps.get<MC_MESH_PROPS>()->clearAll();
+    assert(meshProps().get<MC_MESH_PROPS>() != nullptr);
+    meshProps().get<MC_MESH_PROPS>()->clearAll();
 
     auto ret = createAndMapElements();
     if (ret != SUCCESS)
     {
-        _meshProps.get<MC_MESH_PROPS>()->clearAll();
+        meshProps().get<MC_MESH_PROPS>()->clearAll();
         return ret;
     }
 
-    _meshProps.release<MC_BLOCK_ID>();
-    _meshProps.release<MC_BLOCK_DATA>();
+    meshProps().release<MC_BLOCK_ID>();
+    meshProps().release<MC_BLOCK_DATA>();
 
     return SUCCESS;
 }
 
-MCBuilder::RetCode
-MCBuilder::gatherBlockData(const OVM::CellHandle& tetStart, vector<bool>& tetVisited, BlockData& blockData)
+MCBuilder::RetCode MCBuilder::gatherBlockData(const CH& tetStart, vector<bool>& tetVisited, BlockData& blockData)
 {
-    TetMesh& tetMesh = _meshProps.mesh;
-    set<std::pair<OVM::CellHandle, OVM::EdgeHandle>> visitedTetEdges;
-    set<std::pair<OVM::CellHandle, OVM::VertexHandle>> visitedTetCorners;
+    TetMesh& tetMesh = meshProps().mesh();
+    set<std::pair<CH, EH>> visitedTetEdges;
+    set<std::pair<CH, VH>> visitedTetCorners;
 
     auto tetVisited2 = tetVisited; // Local copy is needed for intermediate floodfill
     bool toroidal = !makeBlockTransitionFree(tetVisited2, tetStart);
@@ -137,100 +136,100 @@ MCBuilder::gatherBlockData(const OVM::CellHandle& tetStart, vector<bool>& tetVis
 
     auto scanForBlockElements
         = [this, toroidal, &tetMesh, &tetVisited, &blockData, &visitedTetEdges, &visitedTetCorners, &invalidWalls](
-              const OVM::CellHandle& tet)
+              const CH& tet)
     {
         // Tets are floodfilled one by one
         blockData.tets.insert(tet);
-        _meshProps.set<MC_BLOCK_ID>(tet, blockData.id);
+        meshProps().set<MC_BLOCK_ID>(tet, blockData.id);
 
         // Search for for special tet mesh elements such as node-vertices/arc-edges/patch-faces
         // by checking local neighborhood
-        for (auto hf : tetMesh.cell_halffaces(tet))
+        for (HFH hf : tetMesh.cell_halffaces(tet))
         {
             // Check for faces on block walls (patches)
-            if (_meshProps.isBlockBoundary(hf))
+            if (meshProps().isBlockBoundary(hf))
             {
                 // Add patch halfface
-                UVWDir hfNormal1 = normalDirUVW(hf);
-                if (dim(hfNormal1) != 1)
+                UVWDir normalHf1 = normalDirUVW(hf);
+                if (dim(normalHf1) != 1)
                 {
                     invalidWalls = true;
                     return true;
                 }
-                auto tetOpp = tetMesh.incident_cell(tetMesh.opposite_halfface_handle(hf));
+                CH tetOpp = tetMesh.incident_cell(tetMesh.opposite_halfface_handle(hf));
                 if (tetOpp.is_valid() && tetVisited[tetOpp.idx()]
-                    && _meshProps.get<MC_BLOCK_ID>(tetOpp) == blockData.id)
+                    && meshProps().get<MC_BLOCK_ID>(tetOpp) == blockData.id)
                 {
                     blockData.selfadjacent = true;
-                    blockData.axis = hfNormal1;
+                    blockData.axis = normalHf1;
                 }
-                blockData.halffaces[hfNormal1].insert(hf);
+                blockData.halffaces[normalHf1].insert(hf);
 
                 if (toroidal)
                     continue;
 
                 // Check for edges on block arcs
-                for (auto he : tetMesh.halfface_halfedges(hf))
+                for (HEH he : tetMesh.halfface_halfedges(hf))
                 {
-                    auto e = tetMesh.edge_handle(he);
+                    EH e = tetMesh.edge_handle(he);
                     if (visitedTetEdges.find({tet, e}) != visitedTetEdges.end())
                         continue;
 
-                    auto adjHf = adjacentHfOnWall(hf, he);
+                    HFH hfAdj = adjacentHfOnWall(hf, he);
                     visitedTetEdges.insert({tet, e});
-                    visitedTetEdges.insert({tetMesh.incident_cell(adjHf), e});
+                    visitedTetEdges.insert({tetMesh.incident_cell(hfAdj), e});
 
-                    auto hfNormal2 = normalDirUVW(adjHf);
-                    if (hfNormal1 != hfNormal2)
+                    UVWDir normalHf2 = normalDirUVW(hfAdj);
+                    if (normalHf1 != normalHf2)
                     {
                         // Add block-arc edge
-                        UVWDir dir2 = hfNormal1 | hfNormal2;
-                        if (dim(hfNormal2) != 1 || dim(dir2) != 2)
+                        UVWDir dir2 = normalHf1 | normalHf2;
+                        if (dim(normalHf2) != 1 || dim(dir2) != 2)
                         {
                             invalidWalls = true;
                             return true;
                         }
                         blockData.edges[dir2].insert(e);
-                        _meshProps.set<IS_ARC>(e, true);
+                        meshProps().set<IS_ARC>(e, true);
 
                         // Check for vertices on block corners (nodes)
-                        for (auto v : tetMesh.halfedge_vertices(he))
+                        for (VH v : tetMesh.halfedge_vertices(he))
                         {
                             if (visitedTetCorners.find({tet, v}) != visitedTetCorners.end())
                                 continue;
 
                             forVertexNeighbourTetsInBlock(v,
                                                           tet,
-                                                          [&visitedTetCorners, &v](const OVM::CellHandle tetNeighbor)
+                                                          [&visitedTetCorners, &v](const CH tetNeighbor)
                                                           {
                                                               visitedTetCorners.insert({tetNeighbor, v});
                                                               return false;
                                                           });
 
                             UVWDir hfNormal3 = UVWDir::NONE;
-                            forVertexNeighbourHalffacesInBlock(
-                                v,
-                                tet,
-                                [this, &hfNormal3, &dir2](const OVM::HalfFaceHandle hfNeighbor)
-                                {
-                                    if (_meshProps.isBlockBoundary(hfNeighbor))
-                                    {
-                                        UVWDir hfNormal = normalDirUVW(hfNeighbor);
-                                        if ((dir2 & hfNormal) == UVWDir::NONE)
-                                        {
-                                            assert(hfNormal3 == UVWDir::NONE || hfNormal3 == hfNormal);
-                                            hfNormal3 = hfNormal;
-                                            return true;
-                                        }
-                                    }
-                                    return false;
-                                });
+                            forVertexNeighbourHalffacesInBlock(v,
+                                                               tet,
+                                                               [this, &hfNormal3, &dir2](const HFH hfNeighbor)
+                                                               {
+                                                                   if (meshProps().isBlockBoundary(hfNeighbor))
+                                                                   {
+                                                                       UVWDir hfNormal = normalDirUVW(hfNeighbor);
+                                                                       if ((dir2 & hfNormal) == UVWDir::NONE)
+                                                                       {
+                                                                           assert(hfNormal3 == UVWDir::NONE
+                                                                                  || hfNormal3 == hfNormal);
+                                                                           hfNormal3 = hfNormal;
+                                                                           return true;
+                                                                       }
+                                                                   }
+                                                                   return false;
+                                                               });
 
                             if (hfNormal3 != UVWDir::NONE)
                             {
                                 // Add block cornernode vertex
                                 UVWDir dir3 = dir2 | hfNormal3;
-                                if (dim(hfNormal1) != 1 || dim(dir3) != 3)
+                                if (dim(normalHf1) != 1 || dim(dir3) != 3)
                                 {
                                     invalidWalls = true;
                                     return true;
@@ -316,22 +315,22 @@ MCBuilder::gatherBlockData(const OVM::CellHandle& tetStart, vector<bool>& tetVis
 
 MCBuilder::RetCode MCBuilder::createAndMapNodes()
 {
-    TetMesh& tetMesh = _meshProps.mesh;
-    MCMeshProps& mcMeshProps = *_meshProps.get<MC_MESH_PROPS>();
-    MCMesh& mcMesh = mcMeshProps.mesh;
+    TetMesh& tetMesh = meshProps().mesh();
+    MCMeshProps& mcMeshProps = *meshProps().get<MC_MESH_PROPS>();
+    MCMesh& mcMesh = mcMeshProps.mesh();
 
-    _meshProps.allocate<MC_NODE>(OVM::VertexHandle(-1));
-    mcMeshProps.allocate<NODE_MESH_VERTEX>(OVM::VertexHandle(-1));
-    if (_meshProps.isAllocated<IS_FEATURE_V>())
-        mcMeshProps.allocate<IS_FEATURE_V>(false);
+    meshProps().allocate<MC_NODE>(VH(-1));
+    mcMeshProps.allocate<NODE_MESH_VERTEX>(VH(-1));
+    if (meshProps().isAllocated<IS_FEATURE_V>())
+        mcMeshProps.allocate<IS_FEATURE_V>(0);
 
     // Detect all vertices with >2 arcs incident as nodes
     // and map mutually
-    for (auto v : tetMesh.vertices())
+    for (VH v : tetMesh.vertices())
     {
         int nArcEdges = 0;
-        for (auto e : tetMesh.vertex_edges(v))
-            if (_meshProps.get<IS_ARC>(e))
+        for (EH e : tetMesh.vertex_edges(v))
+            if (meshProps().get<IS_ARC>(e))
                 nArcEdges++;
         if (nArcEdges == 1)
         {
@@ -341,10 +340,10 @@ MCBuilder::RetCode MCBuilder::createAndMapNodes()
         if (nArcEdges > 2)
         {
             _isNode[v.idx()] = true;
-            auto n = mcMesh.add_vertex(tetMesh.vertex(v));
-            if (_meshProps.isAllocated<IS_FEATURE_V>() && mcMeshProps.isAllocated<IS_FEATURE_V>())
-                mcMeshProps.set<IS_FEATURE_V>(n, _meshProps.get<IS_FEATURE_V>(v));
-            _meshProps.set<MC_NODE>(v, n);
+            VH n = mcMesh.add_vertex(tetMesh.vertex(v));
+            if (meshProps().isAllocated<IS_FEATURE_V>() && mcMeshProps.isAllocated<IS_FEATURE_V>())
+                mcMeshProps.set<IS_FEATURE_V>(n, meshProps().get<IS_FEATURE_V>(v));
+            meshProps().set<MC_NODE>(v, n);
             mcMeshProps.set<NODE_MESH_VERTEX>(n, v);
         }
     }
@@ -354,40 +353,40 @@ MCBuilder::RetCode MCBuilder::createAndMapNodes()
 
 MCBuilder::RetCode MCBuilder::createAndMapArcs()
 {
-    TetMesh& tetMesh = _meshProps.mesh;
-    MCMeshProps& mcMeshProps = *_meshProps.get<MC_MESH_PROPS>();
-    MCMesh& mcMesh = mcMeshProps.mesh;
+    TetMesh& tetMesh = meshProps().mesh();
+    MCMeshProps& mcMeshProps = *meshProps().get<MC_MESH_PROPS>();
+    MCMesh& mcMesh = mcMeshProps.mesh();
 
-    _meshProps.allocate<MC_ARC>(OVM::EdgeHandle(-1));
-    mcMeshProps.allocate<ARC_MESH_HALFEDGES>(list<OVM::HalfEdgeHandle>());
+    meshProps().allocate<MC_ARC>(EH(-1));
+    mcMeshProps.allocate<ARC_MESH_HALFEDGES>(list<HEH>());
     mcMeshProps.allocate<IS_SINGULAR>(false);
-    if (_meshProps.isAllocated<IS_FEATURE_E>())
-        mcMeshProps.allocate<IS_FEATURE_E>(false);
+    if (meshProps().isAllocated<IS_FEATURE_E>())
+        mcMeshProps.allocate<IS_FEATURE_E>(0);
     mcMeshProps.allocate<CHILD_EDGES>();
     mcMeshProps.allocate<CHILD_HALFEDGES>();
 
     // Connect arc edges to complete chains connecting two nodes
     // and map mutually
     std::vector<bool> edgeVisited(tetMesh.n_edges(), false);
-    for (auto e : tetMesh.edges())
+    for (EH e : tetMesh.edges())
     {
-        if (!edgeVisited[e.idx()] && _meshProps.get<IS_ARC>(e))
+        if (!edgeVisited[e.idx()] && meshProps().get<IS_ARC>(e))
         {
             edgeVisited[e.idx()] = true;
-            list<OVM::HalfEdgeHandle> chain({tetMesh.halfedge_handle(e, 0)});
-            auto vTo = tetMesh.to_vertex_handle(chain.back());
-            auto vFrom = tetMesh.from_vertex_handle(chain.front());
+            list<HEH> chain({tetMesh.halfedge_handle(e, 0)});
+            VH vTo = tetMesh.to_vertex_handle(chain.back());
+            VH vFrom = tetMesh.from_vertex_handle(chain.front());
 
             // Walk forward
             for (; !_isNode[vTo.idx()] && vTo != vFrom; vTo = tetMesh.to_vertex_handle(chain.back()))
             {
-                auto heNext = tetMesh.InvalidHalfEdgeHandle;
-                for (auto heOut : tetMesh.outgoing_halfedges(vTo))
+                HEH heNext = tetMesh.InvalidHalfEdgeHandle;
+                for (HEH heOut : tetMesh.outgoing_halfedges(vTo))
                 {
                     if (heOut == tetMesh.opposite_halfedge_handle(chain.back()))
                         continue;
-                    auto eOut = tetMesh.edge_handle(heOut);
-                    if (_meshProps.get<IS_ARC>(eOut))
+                    EH eOut = tetMesh.edge_handle(heOut);
+                    if (meshProps().get<IS_ARC>(eOut))
                     {
                         assert(!edgeVisited[eOut.idx()]);
                         assert(!heNext.is_valid());
@@ -401,13 +400,13 @@ MCBuilder::RetCode MCBuilder::createAndMapArcs()
             // Walk backward
             for (; !_isNode[vFrom.idx()] && vTo != vFrom; vFrom = tetMesh.from_vertex_handle(chain.front()))
             {
-                auto hePrev = tetMesh.InvalidHalfEdgeHandle;
-                for (auto heIn : tetMesh.incoming_halfedges(vFrom))
+                HEH hePrev = tetMesh.InvalidHalfEdgeHandle;
+                for (HEH heIn : tetMesh.incoming_halfedges(vFrom))
                 {
                     if (heIn == tetMesh.opposite_halfedge_handle(chain.front()))
                         continue;
-                    auto eIn = tetMesh.edge_handle(heIn);
-                    if (_meshProps.get<IS_ARC>(eIn))
+                    EH eIn = tetMesh.edge_handle(heIn);
+                    if (meshProps().get<IS_ARC>(eIn))
                     {
                         assert(!edgeVisited[eIn.idx()]);
                         assert(!hePrev.is_valid());
@@ -422,34 +421,34 @@ MCBuilder::RetCode MCBuilder::createAndMapArcs()
 
             if (circularNoNode)
             {
-                for (auto he : chain)
-                    _meshProps.set<MC_ARC>(tetMesh.edge_handle(he), UNASSIGNED_CIRCULAR_ARC);
+                for (HEH he : chain)
+                    meshProps().set<MC_ARC>(tetMesh.edge_handle(he), UNASSIGNED_CIRCULAR_ARC);
             }
             else
             {
-                auto nodeFrom = _meshProps.get<MC_NODE>(vFrom);
-                auto nodeTo = _meshProps.get<MC_NODE>(vTo);
-                auto arc = mcMesh.add_edge(nodeFrom, nodeTo, true);
-                assert(arc.is_valid());
-                assert(mcMesh.from_vertex_handle(mcMesh.halfedge_handle(arc, 0)) == nodeFrom);
-                mcMeshProps.set<ARC_MESH_HALFEDGES>(arc, chain);
-                mcMeshProps.set<IS_SINGULAR>(arc, _meshProps.get<IS_SINGULAR>(tetMesh.edge_handle(chain.front())));
+                VH nFrom = meshProps().get<MC_NODE>(vFrom);
+                VH nTo = meshProps().get<MC_NODE>(vTo);
+                EH a = mcMesh.add_edge(nFrom, nTo, true);
+                assert(a.is_valid());
+                assert(mcMesh.from_vertex_handle(mcMesh.halfedge_handle(a, 0)) == nFrom);
+                mcMeshProps.set<ARC_MESH_HALFEDGES>(a, chain);
+                mcMeshProps.set<IS_SINGULAR>(a, meshProps().get<IS_SINGULAR>(tetMesh.edge_handle(chain.front())));
 
-                if (_meshProps.isAllocated<IS_FEATURE_E>() && mcMeshProps.isAllocated<IS_FEATURE_E>())
+                if (meshProps().isAllocated<IS_FEATURE_E>() && mcMeshProps.isAllocated<IS_FEATURE_E>())
                 {
                     int nFeatureArcs = 0;
                     int nNonFeatureArcs = 0;
-                    for (auto he : chain)
-                        if (_meshProps.get<IS_FEATURE_E>(tetMesh.edge_handle(he)))
+                    for (HEH he : chain)
+                        if (meshProps().get<IS_FEATURE_E>(tetMesh.edge_handle(he)))
                             nFeatureArcs++;
                         else
                             nNonFeatureArcs++;
                     assert(nFeatureArcs == 0 || nNonFeatureArcs == 0);
-                    mcMeshProps.set<IS_FEATURE_E>(arc, nFeatureArcs != 0);
+                    mcMeshProps.set<IS_FEATURE_E>(a, meshProps().get<IS_FEATURE_E>(tetMesh.edge_handle(chain.front())));
                 }
 
-                for (auto he : chain)
-                    _meshProps.set<MC_ARC>(tetMesh.edge_handle(he), arc);
+                for (HEH he : chain)
+                    meshProps().set<MC_ARC>(tetMesh.edge_handle(he), a);
             }
         }
     }
@@ -459,61 +458,58 @@ MCBuilder::RetCode MCBuilder::createAndMapArcs()
 
 MCBuilder::RetCode MCBuilder::createAndMapPatches()
 {
-    TetMesh& tetMesh = _meshProps.mesh;
-    MCMeshProps& mcMeshProps = *_meshProps.get<MC_MESH_PROPS>();
-    MCMesh& mcMesh = mcMeshProps.mesh;
+    TetMesh& tetMesh = meshProps().mesh();
+    MCMeshProps& mcMeshProps = *meshProps().get<MC_MESH_PROPS>();
+    MCMesh& mcMesh = mcMeshProps.mesh();
 
-    _meshProps.allocate<MC_PATCH>();
+    meshProps().allocate<MC_PATCH>();
     mcMeshProps.allocate<PATCH_MESH_HALFFACES>();
     mcMeshProps.allocate<PATCH_TRANSITION>();
     mcMeshProps.allocate<PATCH_MIN_DIST>();
     mcMeshProps.allocate<CHILD_FACES>();
     mcMeshProps.allocate<CHILD_HALFFACES>();
-    if (_meshProps.isAllocated<IS_FEATURE_F>())
-        mcMeshProps.allocate<IS_FEATURE_F>(false);
+    if (meshProps().isAllocated<IS_FEATURE_F>())
+        mcMeshProps.allocate<IS_FEATURE_F>(0);
 
     // Connect patch halffaces to complete patches
     // and map mutually
     std::vector<bool> hfVisited(tetMesh.n_halffaces(), false);
 
-    for (auto hfStart : tetMesh.halffaces())
+    for (HFH hfStart : tetMesh.halffaces())
     {
-        if (tetMesh.is_boundary(hfStart) || hfVisited[hfStart.idx()] || !_meshProps.isBlockBoundary(hfStart))
+        if (tetMesh.is_boundary(hfStart) || hfVisited[hfStart.idx()] || !meshProps().isBlockBoundary(hfStart))
             continue;
 
         bool annular = false;
 
-        set<OVM::HalfEdgeHandle> boundaryHalfarcs;
-        set<OVM::HalfFaceHandle> patchHfs({hfStart});
+        set<HEH> boundaryHalfarcs;
+        set<HFH> hfsP({hfStart});
 
         forEachFloodedHalfFaceInPatch(
             hfStart,
             hfVisited,
-            [this, &mcMeshProps, &tetMesh, &annular, &boundaryHalfarcs, &patchHfs, &hfVisited](
-                const OVM::HalfFaceHandle& hfFlooded)
+            [this, &mcMeshProps, &tetMesh, &annular, &boundaryHalfarcs, &hfsP, &hfVisited](const HFH& hfFlooded)
             {
-                patchHfs.insert(hfFlooded);
+                hfsP.insert(hfFlooded);
                 hfVisited[tetMesh.opposite_halfface_handle(hfFlooded).idx()] = true;
-                for (auto he : tetMesh.halfface_halfedges(hfFlooded))
+                for (HEH he : tetMesh.halfface_halfedges(hfFlooded))
                 {
-                    auto e = tetMesh.edge_handle(he);
-                    auto arc = _meshProps.get<MC_ARC>(e);
-                    if (arc.is_valid())
+                    EH e = tetMesh.edge_handle(he);
+                    EH a = meshProps().get<MC_ARC>(e);
+                    if (a.is_valid())
                     {
-                        if (arc != UNASSIGNED_CIRCULAR_ARC)
+                        if (a != UNASSIGNED_CIRCULAR_ARC)
                         {
-                            const auto& arcHalfedges = mcMeshProps.ref<ARC_MESH_HALFEDGES>(arc);
-                            auto halfArc = mcMeshProps.mesh.halfedge_handle(arc, 0);
-                            if (std::find(arcHalfedges.begin(), arcHalfedges.end(), he) == arcHalfedges.end())
-                                halfArc = mcMeshProps.mesh.opposite_halfedge_handle(halfArc);
+                            const auto& hesA = mcMeshProps.ref<ARC_MESH_HALFEDGES>(a);
+                            HEH ha = mcMeshProps.mesh().halfedge_handle(a, 0);
+                            if (std::find(hesA.begin(), hesA.end(), he) == hesA.end())
+                                ha = mcMeshProps.mesh().opposite_halfedge_handle(ha);
                             else
                             {
-                                assert(std::find(arcHalfedges.begin(),
-                                                 arcHalfedges.end(),
-                                                 tetMesh.opposite_halfedge_handle(he))
-                                       == arcHalfedges.end());
+                                assert(std::find(hesA.begin(), hesA.end(), tetMesh.opposite_halfedge_handle(he))
+                                       == hesA.end());
                             }
-                            boundaryHalfarcs.insert(halfArc);
+                            boundaryHalfarcs.insert(ha);
                         }
                         else
                             annular = true;
@@ -525,59 +521,60 @@ MCBuilder::RetCode MCBuilder::createAndMapPatches()
         if (boundaryHalfarcs.size() < 4)
             annular = true;
 
-        vector<OVM::HalfEdgeHandle> boundaryHalfarcsOrdered;
+        vector<HEH> boundaryHalfarcsOrdered;
         if (!annular)
         {
-            boundaryHalfarcsOrdered = MCMeshManipulator(_meshProps).orderPatchHalfarcs(boundaryHalfarcs);
+            boundaryHalfarcsOrdered = MCMeshManipulator(meshProps()).orderPatchHalfarcs(boundaryHalfarcs);
             if (boundaryHalfarcsOrdered.size() != boundaryHalfarcs.size())
                 annular = true;
         }
 
         assert(!annular || nToroidalBlocks() > 0);
         if (annular)
-            for (auto hf : patchHfs)
-                _meshProps.set<MC_PATCH>(tetMesh.face_handle(hf), UNASSIGNED_ANNULAR_PATCH);
+            for (HFH hf : hfsP)
+                meshProps().set<MC_PATCH>(tetMesh.face_handle(hf), UNASSIGNED_ANNULAR_PATCH);
         else
         {
 #ifndef NDEBUG
-            auto patch = mcMesh.add_face(boundaryHalfarcsOrdered, true);
+            FH p = mcMesh.add_face(boundaryHalfarcsOrdered, true);
 #else
-            auto patch = mcMesh.add_face(boundaryHalfarcsOrdered);
+            FH p = mcMesh.add_face(boundaryHalfarcsOrdered);
 #endif
-            assert(patch.is_valid());
+            assert(p.is_valid());
             assert(std::find(boundaryHalfarcsOrdered.begin(),
                              boundaryHalfarcsOrdered.end(),
-                             *mcMesh.hfhe_iter(mcMesh.halfface_handle(patch, 0)))
+                             *mcMesh.hfhe_iter(mcMesh.halfface_handle(p, 0)))
                    != boundaryHalfarcsOrdered.end());
-            mcMeshProps.set<PATCH_MESH_HALFFACES>(patch, patchHfs);
+            mcMeshProps.set<PATCH_MESH_HALFFACES>(p, hfsP);
 
-            if (_meshProps.isAllocated<IS_FEATURE_F>() && mcMeshProps.isAllocated<IS_FEATURE_F>())
+            if (meshProps().isAllocated<IS_FEATURE_F>() && mcMeshProps.isAllocated<IS_FEATURE_F>())
             {
                 int nFeatureFaces = 0;
                 int nNonFeatureFaces = 0;
-                for (auto hf : patchHfs)
-                    if (_meshProps.get<IS_FEATURE_F>(tetMesh.face_handle(hf)))
+                for (HFH hf : hfsP)
+                    if (meshProps().get<IS_FEATURE_F>(tetMesh.face_handle(hf)))
                         nFeatureFaces++;
                     else
                         nNonFeatureFaces++;
                 assert(nFeatureFaces == 0 || nNonFeatureFaces == 0);
                 assert(nFeatureFaces == 0 || nNonFeatureFaces == 0);
-                mcMeshProps.set<IS_FEATURE_F>(patch, nFeatureFaces != 0);
+                mcMeshProps.set<IS_FEATURE_F>(p, meshProps().get<IS_FEATURE_F>(tetMesh.face_handle(*hfsP.begin())));
             }
 
-            mcMeshProps.set<PATCH_TRANSITION>(patch, _meshProps.hfTransition(*patchHfs.begin()));
+            mcMeshProps.set<PATCH_TRANSITION>(p, meshProps().hfTransition<TRANSITION>(*hfsP.begin()));
             float minDist = FLT_MAX;
-            for (auto hf : patchHfs)
+            for (HFH hf : hfsP)
             {
                 // THE SECOND is only true, if both adjacent blocks are transition free i.e. if none is toroidal
                 // THE FIRST should be true even if the blocks adjacent to it are toroidal
                 assert((nToroidalBlocks() > 0
-                        && _meshProps.hfTransition(hf).rotation == mcMeshProps.get<PATCH_TRANSITION>(patch).rotation)
-                       || _meshProps.hfTransition(hf) == mcMeshProps.get<PATCH_TRANSITION>(patch));
-                _meshProps.set<MC_PATCH>(tetMesh.face_handle(hf), patch);
-                minDist = std::min(minDist, _meshProps.get<WALL_DIST>(tetMesh.face_handle(hf)));
+                        && meshProps().hfTransition<TRANSITION>(hf).rotation
+                               == mcMeshProps.get<PATCH_TRANSITION>(p).rotation)
+                       || meshProps().hfTransition<TRANSITION>(hf) == mcMeshProps.get<PATCH_TRANSITION>(p));
+                meshProps().set<MC_PATCH>(tetMesh.face_handle(hf), p);
+                minDist = std::min(minDist, meshProps().get<WALL_DIST>(tetMesh.face_handle(hf)));
             }
-            mcMeshProps.set<PATCH_MIN_DIST>(patch, minDist);
+            mcMeshProps.set<PATCH_MIN_DIST>(p, minDist);
         }
     }
 
@@ -586,11 +583,11 @@ MCBuilder::RetCode MCBuilder::createAndMapPatches()
 
 MCBuilder::RetCode MCBuilder::createAndMapBlocks()
 {
-    TetMesh& tetMesh = _meshProps.mesh;
-    MCMeshProps& mcMeshProps = *_meshProps.get<MC_MESH_PROPS>();
-    MCMesh& mcMesh = mcMeshProps.mesh;
+    TetMesh& tetMesh = meshProps().mesh();
+    MCMeshProps& mcMeshProps = *meshProps().get<MC_MESH_PROPS>();
+    MCMesh& mcMesh = mcMeshProps.mesh();
 
-    _meshProps.allocate<MC_BLOCK>();
+    meshProps().allocate<MC_BLOCK>();
     mcMeshProps.allocate<BLOCK_MESH_TETS>();
     mcMeshProps.allocate<BLOCK_CORNER_NODES>();
     mcMeshProps.allocate<BLOCK_EDGE_ARCS>();
@@ -603,79 +600,75 @@ MCBuilder::RetCode MCBuilder::createAndMapBlocks()
 
     // Floodfill blocks to gather halffaces and create cells
     std::vector<bool> tetVisited(tetMesh.n_cells());
-    for (const auto& id2data : _meshProps.ref<MC_BLOCK_DATA>())
+    for (const auto& id2data : meshProps().ref<MC_BLOCK_DATA>())
     {
         const auto& data = id2data.second;
         if (data.toroidal)
         {
             if ((data.axis & UVWDir::ANY_U) != UVWDir::NONE)
-                for (auto tet : data.tets)
-                    _meshProps.set<MC_BLOCK>(tet, UNASSIGNED_TOROIDAL_BLOCK_U);
+                for (CH tet : data.tets)
+                    meshProps().set<MC_BLOCK>(tet, UNASSIGNED_TOROIDAL_BLOCK_U);
             else if ((data.axis & UVWDir::ANY_V) != UVWDir::NONE)
-                for (auto tet : data.tets)
-                    _meshProps.set<MC_BLOCK>(tet, UNASSIGNED_TOROIDAL_BLOCK_V);
+                for (CH tet : data.tets)
+                    meshProps().set<MC_BLOCK>(tet, UNASSIGNED_TOROIDAL_BLOCK_V);
             else
-                for (auto tet : data.tets)
-                    _meshProps.set<MC_BLOCK>(tet, UNASSIGNED_TOROIDAL_BLOCK_W);
+                for (CH tet : data.tets)
+                    meshProps().set<MC_BLOCK>(tet, UNASSIGNED_TOROIDAL_BLOCK_W);
             continue;
         }
 
-        auto tetStart = *data.tets.begin();
-        set<OVM::HalfFaceHandle> blockHalfpatches;
+        CH tetStart = *data.tets.begin();
+        set<HFH> hpsB;
         forEachFloodedTetInBlock(tetStart,
                                  tetVisited,
-                                 [this, &blockHalfpatches, &mcMeshProps](const OVM::CellHandle& tet)
+                                 [this, &hpsB, &mcMeshProps](const CH& tet)
                                  {
-                                     for (auto hf : _meshProps.mesh.cell_halffaces(tet))
+                                     for (HFH hf : meshProps().mesh().cell_halffaces(tet))
                                      {
-                                         auto f = _meshProps.mesh.face_handle(hf);
-                                         if (_meshProps.isBlockBoundary(f))
+                                         FH f = meshProps().mesh().face_handle(hf);
+                                         if (meshProps().isBlockBoundary(f))
                                          {
-                                             auto patch = _meshProps.get<MC_PATCH>(f);
+                                             FH patch = meshProps().get<MC_PATCH>(f);
                                              assert(patch.is_valid());
-                                             auto halfpatch = mcMeshProps.mesh.halfface_handle(patch, 0);
-                                             const auto& patchHfs = mcMeshProps.ref<PATCH_MESH_HALFFACES>(patch);
-                                             if (patchHfs.find(hf) == patchHfs.end())
-                                                 halfpatch = mcMeshProps.mesh.opposite_halfface_handle(halfpatch);
-                                             blockHalfpatches.insert(halfpatch);
+                                             HFH hp = mcMeshProps.mesh().halfface_handle(patch, 0);
+                                             const auto& hfsP = mcMeshProps.ref<PATCH_MESH_HALFFACES>(patch);
+                                             if (hfsP.find(hf) == hfsP.end())
+                                                 hp = mcMeshProps.mesh().opposite_halfface_handle(hp);
+                                             hpsB.insert(hp);
                                          }
                                      }
                                      return false;
                                  });
-        // #ifndef NDEBUG
-        //         auto block = mcMesh.add_cell({blockHalfpatches.begin(), blockHalfpatches.end()}, true);
-        // #else
-        auto block = mcMesh.add_cell({blockHalfpatches.begin(), blockHalfpatches.end()});
-        // #endif
-        assert(block.is_valid());
-        mcMeshProps.set<BLOCK_MESH_TETS>(block, data.tets);
+        CH b = mcMesh.add_cell({hpsB.begin(), hpsB.end()});
+        assert(b.is_valid());
+        mcMeshProps.set<BLOCK_MESH_TETS>(b, data.tets);
         assert(!data.tets.empty());
-        for (auto tet : data.tets)
-            _meshProps.set<MC_BLOCK>(tet, block);
+        for (CH tet : data.tets)
+            meshProps().set<MC_BLOCK>(tet, b);
 
-        auto& blockCornerNodes = mcMeshProps.ref<BLOCK_CORNER_NODES>(block);
+        auto& blockCornerNodes = mcMeshProps.ref<BLOCK_CORNER_NODES>(b);
         for (const auto& dir2corner : data.corners)
         {
             assert(dim(dir2corner.first) == 3);
-            auto node = _meshProps.get<MC_NODE>(dir2corner.second);
-            blockCornerNodes[dir2corner.first] = node;
-            assert(node.is_valid());
+            VH n = meshProps().get<MC_NODE>(dir2corner.second);
+            blockCornerNodes[dir2corner.first] = n;
+            assert(n.is_valid());
         }
         assert(blockCornerNodes.size() == 8);
 
-        auto& blockEdgeArcs = mcMeshProps.ref<BLOCK_EDGE_ARCS>(block);
-        auto& blockEdgeNodes = mcMeshProps.ref<BLOCK_EDGE_NODES>(block);
+        auto& blockEdgeArcs = mcMeshProps.ref<BLOCK_EDGE_ARCS>(b);
+        auto& blockEdgeNodes = mcMeshProps.ref<BLOCK_EDGE_NODES>(b);
         for (const auto& dir2edges : data.edges)
         {
             const auto& dir2 = dir2edges.first;
             const auto& edges = dir2edges.second;
             assert(dim(dir2) == 2);
-            blockEdgeNodes[dir2] = set<OVM::VertexHandle>();
+            blockEdgeNodes[dir2] = set<VH>();
             for (const auto& e : edges)
             {
-                auto arc = _meshProps.get<MC_ARC>(e);
-                blockEdgeArcs[dir2].insert(arc);
-                assert(arc.is_valid());
+                EH a = meshProps().get<MC_ARC>(e);
+                blockEdgeArcs[dir2].insert(a);
+                assert(a.is_valid());
             }
             assert(!blockEdgeArcs[dir2].empty());
             if (blockEdgeArcs[dir2].size() == 1)
@@ -709,19 +702,19 @@ MCBuilder::RetCode MCBuilder::createAndMapBlocks()
         assert(blockEdgeArcs.size() == 12);
         assert(blockEdgeNodes.size() == 12);
 
-        auto& blockFacePatches = mcMeshProps.ref<BLOCK_FACE_PATCHES>(block);
-        auto& blockFaceArcs = mcMeshProps.ref<BLOCK_FACE_ARCS>(block);
-        auto& blockFaceNodes = mcMeshProps.ref<BLOCK_FACE_NODES>(block);
+        auto& blockFacePatches = mcMeshProps.ref<BLOCK_FACE_PATCHES>(b);
+        auto& blockFaceArcs = mcMeshProps.ref<BLOCK_FACE_ARCS>(b);
+        auto& blockFaceNodes = mcMeshProps.ref<BLOCK_FACE_NODES>(b);
         for (const auto& dir2halffaces : data.halffaces)
         {
             const auto& dir1 = dir2halffaces.first;
             const auto& halffaces = dir2halffaces.second;
             assert(dim(dir1) == 1);
-            blockFaceArcs[dir1] = set<OVM::EdgeHandle>();
-            blockFaceNodes[dir1] = set<OVM::VertexHandle>();
-            for (const auto& hf : halffaces)
+            blockFaceArcs[dir1] = set<EH>();
+            blockFaceNodes[dir1] = set<VH>();
+            for (const HFH& hf : halffaces)
             {
-                blockFacePatches[dir1].insert(_meshProps.get<MC_PATCH>(tetMesh.face_handle(hf)));
+                blockFacePatches[dir1].insert(meshProps().get<MC_PATCH>(tetMesh.face_handle(hf)));
             }
 
             if (blockFacePatches[dir1].size() == 1)
@@ -767,22 +760,18 @@ MCBuilder::RetCode MCBuilder::createAndMapBlocks()
                         && blockEdgeNodes[dir2d].find(v) == blockEdgeNodes[dir2d].end())
                         blockFaceNodes[dir1].insert(v);
         }
-        auto& blockAllArcs = mcMeshProps.ref<BLOCK_ALL_ARCS>(block);
-        for (auto dim1dir : DIM_1_DIRS)
+        auto& blockAllArcs = mcMeshProps.ref<BLOCK_ALL_ARCS>(b);
+        for (UVWDir dim1dir : DIM_1_DIRS)
             blockAllArcs[dim1dir] = {};
-        for (auto a : mcMesh.cell_edges(block))
+        for (EH a : mcMesh.cell_edges(b))
         {
-            auto he = *mcMeshProps.ref<ARC_MESH_HALFEDGES>(a).begin();
+            HEH he = *mcMeshProps.ref<ARC_MESH_HALFEDGES>(a).begin();
 
             bool flip = he.idx() % 2 != 0;
 
-            UVWDir dir = UVWDir::NONE;
-            for (auto tet : tetMesh.halfedge_cells(he))
-                if (_meshPropsC.get<MC_BLOCK>(tet) == block)
-                {
-                    dir = edgeDirection(tetMesh.edge_handle(he), tet);
-                    break;
-                }
+            CH tetB = findMatching(tetMesh.halfedge_cells(he),
+                                   [&, this](const CH& tet) { return meshProps().get<MC_BLOCK>(tet) == b; });
+            UVWDir dir = edgeDirection(tetMesh.edge_handle(he), tetB);
             if (flip)
                 dir = -dir;
             assert(dim(dir) == 1);
@@ -800,10 +789,10 @@ MCBuilder::RetCode MCBuilder::createAndMapBlocks()
 
 void MCBuilder::mark90degreeBoundaryArcsAsSingular()
 {
-    MCMeshProps& mcMeshProps = *_meshProps.get<MC_MESH_PROPS>();
-    MCMesh& mcMesh = mcMeshProps.mesh;
+    MCMeshProps& mcMeshProps = *meshProps().get<MC_MESH_PROPS>();
+    MCMesh& mcMesh = mcMeshProps.mesh();
 
-    for (auto b : mcMesh.cells())
+    for (CH b : mcMesh.cells())
         for (auto& dir2a : mcMeshProps.ref<BLOCK_EDGE_ARCS>(b))
             for (auto& a : dir2a.second)
             {
@@ -814,11 +803,11 @@ void MCBuilder::mark90degreeBoundaryArcsAsSingular()
             }
 }
 
-MCBuilder::RetCode MCBuilder::updateSingleBlock(const OVM::CellHandle& tetStart)
+MCBuilder::RetCode MCBuilder::updateSingleBlock(const CH& tetStart)
 {
-    vector<bool> tetVisited(_meshProps.mesh.n_cells(), false);
+    vector<bool> tetVisited(meshProps().mesh().n_cells(), false);
 
-    auto& blockData = _meshProps.ref<MC_BLOCK_DATA>();
+    auto& blockData = meshProps().ref<MC_BLOCK_DATA>();
     bool found = false;
     for (auto& id2data : blockData)
     {
@@ -855,7 +844,7 @@ MCBuilder::RetCode MCBuilder::updateSingleBlock(const OVM::CellHandle& tetStart)
 size_t MCBuilder::nToroidalBlocks() const
 {
     size_t n = 0;
-    for (const auto& data : _meshProps.ref<MC_BLOCK_DATA>())
+    for (const auto& data : meshProps().ref<MC_BLOCK_DATA>())
         if (data.second.toroidal)
             n++;
     return n;
@@ -864,7 +853,7 @@ size_t MCBuilder::nToroidalBlocks() const
 size_t MCBuilder::nSelfadjacentBlocks() const
 {
     size_t n = 0;
-    for (const auto& data : _meshProps.ref<MC_BLOCK_DATA>())
+    for (const auto& data : meshProps().ref<MC_BLOCK_DATA>())
         if (data.second.selfadjacent)
             n++;
     return n;

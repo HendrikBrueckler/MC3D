@@ -144,6 +144,76 @@ struct Index<T, U, Ts...> : std::integral_constant<std::size_t, 1 + Index<T, Ts.
 };
 
 /**
+ * @brief Temporarily allocates the specified props on a passed MeshPropertyWrapper during construction
+ *        and releases them during destruction. Leaves already allocated props untouched.
+ *
+ * @tparam MeshPropsT MeshPropWrapper type
+ * @tparam Props list of properties to manage
+ */
+template <typename MeshPropsT, typename... Props>
+class TemporaryPropAllocator
+{
+    static_assert(no_dupe<Props...>::value, "PROPERTIES NEED TO BE UNIQUE, BUT YOU PASSED DUPLICATES");
+
+  public:
+    TemporaryPropAllocator(TemporaryPropAllocator& mp) = delete;
+    TemporaryPropAllocator(TemporaryPropAllocator&& mp) = delete;
+
+    TemporaryPropAllocator& operator=(const TemporaryPropAllocator&) = delete;
+
+    TemporaryPropAllocator(MeshPropsT& mp) : _mp(mp)
+    {
+        recurseAllocate<0>();
+    }
+
+    ~TemporaryPropAllocator()
+    {
+        recurseRelease<0>();
+    }
+
+  private:
+    template <size_t I = 0, typename std::enable_if<(I < sizeof...(Props)), int>::type = 0>
+    void recurseAllocate()
+    {
+        using Prop = typename std::tuple_element<I, std::tuple<Props...>>::type;
+
+        if (_mp.template isAllocated<Prop>())
+            _wasAllocated[I] = true;
+        else
+        {
+            _wasAllocated[I] = false;
+            _mp.template allocate<Prop>();
+        }
+
+        recurseAllocate<I + 1>();
+    }
+
+    template <size_t I = 0, typename std::enable_if<(I == sizeof...(Props)), int>::type = 0>
+    void recurseAllocate()
+    {
+    }
+
+    template <size_t I = 0, typename std::enable_if<(I < sizeof...(Props)), int>::type = 0>
+    void recurseRelease()
+    {
+        using Prop = typename std::tuple_element<I, std::tuple<Props...>>::type;
+
+        if (!_wasAllocated[I])
+            _mp.template release<Prop>();
+
+        recurseRelease<I + 1>();
+    }
+
+    template <size_t I = 0, typename std::enable_if<(I == sizeof...(Props)), int>::type = 0>
+    void recurseRelease()
+    {
+    }
+
+    MeshPropsT& _mp;
+    bool _wasAllocated[sizeof...(Props)];
+};
+
+/**
  * @brief Properties are classes that are passed as template parameters, and the mesh property manager is
  *        effectively a std::tuple wrapper, as that enables uniform handling of properties and avoids the
  *        need to code dozens of getters/setters/members. Inherit from instantiations of this templated
@@ -164,21 +234,29 @@ class MeshPropsInterface
     static_assert(no_dupe<Props...>::value, "PROPERTIES NEED TO BE UNIQUE, BUT YOU PASSED DUPLICATES");
 
   public:
-    Mesh& mesh;
-    size_t id;
 
     /**
      * @brief Create a wrapper around \p mesh_ that manages properties of its mesh elements.
      *
      * @param mesh_ IN/OUT: mesh to augment by properties
      */
-    MeshPropsInterface(Mesh& mesh_) : mesh(mesh_), id(nextID())
+    MeshPropsInterface(Mesh& mesh_) : _mesh(mesh_), id(nextID())
     {
     }
 
     ~MeshPropsInterface()
     {
         clearRecurse<0>();
+    }
+
+    Mesh& mesh()
+    {
+        return _mesh;
+    }
+
+    const Mesh& mesh() const
+    {
+        return _mesh;
     }
 
     /**
@@ -235,7 +313,7 @@ class MeshPropsInterface
     {
         if (isAllocated<Prop>())
         {
-            LOG(WARNING) << "Tried to allocate an already allocated property, resetting to new default";
+            DLOG(WARNING) << "Tried to allocate an already allocated property, resetting to new default";
             release<Prop>();
         }
         setDefault<Prop>(def);
@@ -283,7 +361,7 @@ class MeshPropsInterface
     void clearAll()
     {
         clearRecurse<0>();
-        mesh.clear(false);
+        mesh().clear(false);
     }
 
     /**
@@ -383,6 +461,20 @@ class MeshPropsInterface
     {
         assert(handle.is_valid());
         return prop<Prop>()[handle];
+    }
+
+    /**
+     * @brief Get the mapped property value of prop \p Prop for element \p handle by reference.
+     *
+     * @tparam Prop property to query
+     * @param handle IN: element for which the property value should be retrieved
+     * @return Prop::const_ref_t reference to property value of \p handle
+     */
+    template <typename Prop, typename std::enable_if<Prop::IS_MAPPED, int>::type = 0>
+    typename Prop::const_ref_t ref(const typename Prop::handle_t& handle) const
+    {
+        assert(handle.is_valid());
+        return prop<Prop>().at(handle);
     }
 
     /**
@@ -674,9 +766,9 @@ class MeshPropsInterface
         static_assert(is_any_of<Prop, Props...>::value, "NO SUCH PROPERTY MANAGED BY THIS CLASS");
         assert(!propIsAllocated<Prop>(ptr));
         ptr = std::unique_ptr<typename Prop::prop_t>(
-            new typename Prop::prop_t(mesh.template request_property<typename Prop::value_t, typename Prop::entity_t>(
+            new typename Prop::prop_t(mesh().template request_property<typename Prop::value_t, typename Prop::entity_t>(
                 Prop::name() + std::to_string(id), def)));
-        mesh.set_persistent(*ptr);
+        mesh().set_persistent(*ptr);
         return *ptr;
     }
 
@@ -702,13 +794,16 @@ class MeshPropsInterface
     {
         static_assert(is_any_of<Prop, Props...>::value, "NO SUCH PROPERTY MANAGED BY THIS CLASS");
         assert(propIsAllocated<Prop>(ptr));
-        mesh.set_persistent(*ptr, false);
+        mesh().set_persistent(*ptr, false);
         for (auto it = ptr->begin(); it != ptr->end(); it++)
             *it = def;
         ptr.reset();
     }
 
   private:
+    Mesh& _mesh;
+    size_t id;
+
     static size_t nextID()
     {
         static size_t MAX_ID = 0;

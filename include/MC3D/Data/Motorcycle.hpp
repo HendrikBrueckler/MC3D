@@ -12,14 +12,15 @@ struct Motorcycle
 {
     size_t ID;
 
-    OVM::CellHandle tet;  // Tet into which the motorcycle propagates
-    OVM::EdgeHandle edge; // edge from which the motorcycle propagates
+    CH tet;  // Tet into which the motorcycle propagates
+    EH edge; // edge from which the motorcycle propagates
 
     Vec3i encodedCoords; // isoCoord and propagationCoord combined (for rotation via transition)
 
     Q isoValue;   // isovalue in coordinate system of tet
     Q startValue; // startvalue in coordinate system of tet
     Q dist;       // total distance travelled
+    Q directDist; // direct distance from origin
 
     /**
      * @brief Create a motorcycle
@@ -31,7 +32,7 @@ struct Motorcycle
      * @param startValue_ IN: startvalue (of propagationCoord) in coordinate system of \p tet
      * @param dist_ IN: starting distance (from origin) of the motorcycle
      */
-    Motorcycle(OVM::CellHandle tet_, OVM::EdgeHandle edge_, Vec3i encodedCoords_, Q isoValue_, Q startValue_, Q dist_);
+    Motorcycle(CH tet_, EH edge_, Vec3i encodedCoords_, Q isoValue_, Q startValue_, Q dist_, Q directDist_);
 
     // Keys used to encode coordinates in a vector
     const static unsigned DEFAULT_KEY = 0;

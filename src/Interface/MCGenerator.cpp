@@ -15,34 +15,36 @@ MCGenerator::MCGenerator(TetMeshProps& meshProps) : TetMeshNavigator(meshProps),
 
 MCGenerator::RetCode MCGenerator::traceMC(bool splitTori, bool splitSelfadjacency, bool simulateBC, bool keepOrigProps)
 {
-    SingularityInitializer init(_meshProps);
+    SingularityInitializer init(meshProps());
     if (init.initTransitions() != SingularityInitializer::SUCCESS
-        || init.initSingularities() != SingularityInitializer::SUCCESS)
+        || init.initSingularities() != SingularityInitializer::SUCCESS
+        || init.makeFeaturesConsistent() != SingularityInitializer::SUCCESS)
         return INVALID_SINGULARITY;
 
     MotorcycleQueue mQ;
-    MotorcycleSpawner spawner(_meshProps, mQ);
-    MotorcycleTracer tracer(_meshProps, mQ, simulateBC);
+    MotorcycleSpawner spawner(meshProps(), mQ);
+    MotorcycleTracer tracer(meshProps(), mQ, simulateBC);
 
-    _meshProps.allocate<IS_WALL>(false);
-    _meshProps.allocate<WALL_DIST>(0.0);
-    _meshProps.allocate<CHILD_CELLS>({});
-    _meshProps.allocate<CHILD_EDGES>({});
-    _meshProps.allocate<CHILD_FACES>({});
-    _meshProps.allocate<IS_ORIGINAL>(false);
-    for (auto f : _meshProps.mesh.faces())
-        _meshProps.set<IS_ORIGINAL>(f, true);
+    meshProps().allocate<IS_WALL>(false);
+    if (meshProps().isAllocated<IS_FEATURE_F>())
+        for (FH f : meshProps().mesh().faces())
+            if (meshProps().get<IS_FEATURE_F>(f))
+                meshProps().set<IS_WALL>(f, true);
+    for (FH f : meshProps().mesh().faces())
+        if (meshProps().mesh().is_boundary(f))
+            meshProps().set<IS_WALL>(f, true);
+    meshProps().allocate<WALL_DIST>(0.0);
+    meshProps().allocate<CHILD_CELLS>({});
+    meshProps().allocate<CHILD_EDGES>({});
+    meshProps().allocate<CHILD_FACES>({});
     if (keepOrigProps)
     {
-        _meshProps.allocate<IS_ORIGINAL_VTX>(false);
-        for (auto v : _meshProps.mesh.vertices())
-            _meshProps.set<IS_ORIGINAL_VTX>(v, true);
-        _meshProps.allocate<CHART_ORIG>();
-        for (auto tet : _meshProps.mesh.cells())
-            _meshProps.set<CHART_ORIG>(tet, _meshProps.ref<CHART>(tet));
-        _meshProps.allocate<TRANSITION_ORIG>();
-        for (auto f : _meshProps.mesh.faces())
-            _meshProps.set<TRANSITION_ORIG>(f, _meshProps.ref<TRANSITION>(f));
+        meshProps().allocate<CHART_ORIG>();
+        for (CH tet : meshProps().mesh().cells())
+            meshProps().set<CHART_ORIG>(tet, meshProps().ref<CHART>(tet));
+        meshProps().allocate<TRANSITION_ORIG>();
+        for (FH f : meshProps().mesh().faces())
+            meshProps().set<TRANSITION_ORIG>(f, meshProps().ref<TRANSITION>(f));
     }
 
     LOG(INFO) << "Tracing the motorcycle complex";
@@ -51,18 +53,18 @@ MCGenerator::RetCode MCGenerator::traceMC(bool splitTori, bool splitSelfadjacenc
 
     if (spawner.spawnSingularityMotorcycles() != MotorcycleSpawner::SUCCESS)
         return SPAWNING_FAILED;
-    if ((_meshPropsC.isAllocated<IS_FEATURE_E>() || _meshPropsC.isAllocated<IS_FEATURE_F>()
-         || _meshPropsC.isAllocated<IS_FEATURE_V>())
+    if ((meshProps().isAllocated<IS_FEATURE_E>() || meshProps().isAllocated<IS_FEATURE_F>()
+         || meshProps().isAllocated<IS_FEATURE_V>())
         && spawner.spawnFeatureMotorcycles() != MotorcycleSpawner::SUCCESS)
         return SPAWNING_FAILED;
     if (tracer.traceAllMotorcycles() != MotorcycleTracer::SUCCESS)
         return TRACING_FAILED;
 
-    MCBuilder builder(_meshProps);
+    MCBuilder builder(meshProps());
     if (builder.discoverBlocks() != MCBuilder::SUCCESS)
         return BUILDING_MC_FAILED;
 
-    for (auto n = builder.nToroidalBlocks(); splitTori && n > 0; n = builder.nToroidalBlocks())
+    for (size_t n = builder.nToroidalBlocks(); splitTori && n > 0; n = builder.nToroidalBlocks())
     {
         LOG(INFO) << "Splitting toroidal blocks. " << n << " remaining";
         if (spawner.spawnTorusSplitMotorcycle() != MotorcycleSpawner::SUCCESS)
@@ -72,15 +74,15 @@ MCGenerator::RetCode MCGenerator::traceMC(bool splitTori, bool splitSelfadjacenc
             return TRACING_FAILED;
 
         auto newWalls = tracer.getNewWalls();
-        auto anyHf = _meshProps.mesh.halfface_handle(newWalls.front(), 0);
-        if (builder.updateSingleBlock(_meshProps.mesh.incident_cell(anyHf)) != MCBuilder::SUCCESS)
+        HFH hfAny = meshProps().mesh().halfface_handle(newWalls.front(), 0);
+        if (builder.updateSingleBlock(meshProps().mesh().incident_cell(hfAny)) != MCBuilder::SUCCESS)
         {
-            _meshProps.clearMC();
+            meshProps().clearMC();
             return SPLITTING_FAILED;
         }
     }
 
-    for (auto n = builder.nSelfadjacentBlocks(); splitSelfadjacency && n > 0; n = builder.nSelfadjacentBlocks())
+    for (size_t n = builder.nSelfadjacentBlocks(); splitSelfadjacency && n > 0; n = builder.nSelfadjacentBlocks())
     {
         LOG(INFO) << "Splitting selfadjacent blocks. " << n << " remaining";
         if (spawner.spawnSelfadjacencySplitMotorcycle() != MotorcycleSpawner::SUCCESS)
@@ -90,12 +92,12 @@ MCGenerator::RetCode MCGenerator::traceMC(bool splitTori, bool splitSelfadjacenc
             return TRACING_FAILED;
 
         auto newWalls = tracer.getNewWalls();
-        auto anyHf = _meshProps.mesh.halfface_handle(newWalls.front(), 0);
-        auto anyHfOpp = _meshProps.mesh.halfface_handle(newWalls.front(), 1);
-        if (builder.updateSingleBlock(_meshProps.mesh.incident_cell(anyHf)) != MCBuilder::SUCCESS
-            || builder.updateSingleBlock(_meshProps.mesh.incident_cell(anyHfOpp)) != MCBuilder::SUCCESS)
+        HFH hfAny = meshProps().mesh().halfface_handle(newWalls.front(), 0);
+        HFH hfAnyOpp = meshProps().mesh().halfface_handle(newWalls.front(), 1);
+        if (builder.updateSingleBlock(meshProps().mesh().incident_cell(hfAny)) != MCBuilder::SUCCESS
+            || builder.updateSingleBlock(meshProps().mesh().incident_cell(hfAnyOpp)) != MCBuilder::SUCCESS)
         {
-            _meshProps.clearMC();
+            meshProps().clearMC();
             return SPLITTING_FAILED;
         }
     }
@@ -103,21 +105,20 @@ MCGenerator::RetCode MCGenerator::traceMC(bool splitTori, bool splitSelfadjacenc
     if (builder.connectMCMesh(splitTori, splitSelfadjacency) != MCBuilder::SUCCESS)
         return BUILDING_MC_FAILED;
 
-    const MCMesh& mesh = _meshPropsC.get<MC_MESH_PROPS>()->mesh;
+    const MCMesh& mesh = meshProps().get<MC_MESH_PROPS>()->mesh();
     LOG(INFO) << "Tracing and connecting the raw motorcycle complex was successful, raw MC has "
               << mesh.n_logical_cells() << " blocks and " << mesh.n_logical_faces() << " walls.";
 
-    _meshProps.release<IS_ORIGINAL>();
     return SUCCESS;
 }
 
 MCGenerator::RetCode MCGenerator::reduceMC(bool preserveSingularWalls, bool avoidSelfadjacency, bool preserveFeatures)
 {
-    const MCMesh& mesh = _meshPropsC.get<MC_MESH_PROPS>()->mesh;
+    const MCMesh& mesh = meshProps().get<MC_MESH_PROPS>()->mesh();
     LOG(INFO) << "Starting to reduce raw MC with " << mesh.n_logical_cells() << " blocks and " << mesh.n_logical_faces()
               << " walls.";
 
-    MCReducer reducer(_meshProps);
+    MCReducer reducer(meshProps());
     reducer.init(preserveSingularWalls, avoidSelfadjacency, preserveFeatures);
 
     while (reducer.isReducible())

@@ -4,8 +4,8 @@ namespace mc3d
 {
 
 Motorcycle::Motorcycle(
-    OVM::CellHandle tet_, OVM::EdgeHandle edge_, Vec3i encodedCoords_, Q isoValue_, Q startValue_, Q dist_)
-    : tet(tet_), edge(edge_), encodedCoords(encodedCoords_), isoValue(isoValue_), startValue(startValue_), dist(dist_)
+    CH tet_, EH edge_, Vec3i encodedCoords_, Q isoValue_, Q startValue_, Q dist_, Q directDist_)
+    : tet(tet_), edge(edge_), encodedCoords(encodedCoords_), isoValue(isoValue_), startValue(startValue_), dist(dist_), directDist(directDist_)
 {
     static size_t maxID = 0;
     ID = maxID++;

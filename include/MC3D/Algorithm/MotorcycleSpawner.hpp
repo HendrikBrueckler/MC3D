@@ -40,7 +40,6 @@ class MotorcycleSpawner : public virtual TetMeshManipulator
      */
     RetCode spawnSingularityMotorcycles();
 
-
     /**
      * @brief Insert motorcycles for each [singular-edge, expansion-direction] pair
      *
@@ -78,7 +77,7 @@ class MotorcycleSpawner : public virtual TetMeshManipulator
      * @return true if a valid motorcycle could be spawned
      * @return false else
      */
-    bool spawnMotorcycle(const OVM::EdgeHandle& e, const OVM::CellHandle& tet, int wallIsoCoord);
+    bool spawnMotorcycle(const EH& e, const CH& tet, int wallIsoCoord);
 
     MotorcycleQueue& _mQ; // A reference to the externally handled priority queue
 };

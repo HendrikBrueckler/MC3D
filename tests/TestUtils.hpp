@@ -1,8 +1,8 @@
 #ifndef MC3D_TESTUTILS_HPP
 #define MC3D_TESTUTILS_HPP
 
-#include "MC3D/Interface/MCGenerator.hpp"
 #include "MC3D/Interface/Reader.hpp"
+#include "MC3D/Interface/MCGenerator.hpp"
 #include "MC3D/Interface/Writer.hpp"
 
 #include "MC3D/Algorithm/MCReducer.hpp"
@@ -31,7 +31,7 @@ class FullToolChainTest : public ::testing::TestWithParam<std::string>
     FullToolChainTest();
 
   protected:
-    OVM::EdgeHandle anySingularEdge();
+    EH anySingularEdge();
 
     void assertValidCharts();
 
@@ -43,16 +43,13 @@ class FullToolChainTest : public ::testing::TestWithParam<std::string>
 
     void assertValidWalls();
 
-    void assertValidMC();
+    void assertValidMC(bool minimality = true);
 
-    void
-    assertPatchesReducible(bool reducible, bool preserveSingularWalls, bool avoidSelfadjacency, bool preserveFeatures);
+    void assertPatchesReducible(bool reducible, bool preserveSingularWalls, bool avoidSelfadjacency);
 
     void assertNodesReducible(bool reducible);
 
     void assertArcsReducible(bool reducible);
-
-    void assertValidIntegerArcLengths();
 
     std::string resourcePath();
 

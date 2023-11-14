@@ -1,5 +1,7 @@
 #include "MC3D/Mesh/MCMeshProps.hpp"
 
+#include <iomanip>
+
 namespace mc3d
 {
 
@@ -7,37 +9,21 @@ MCMeshProps::MCMeshProps(MCMesh& mcMesh) : MCMeshPropsBase(mcMesh)
 {
 }
 
-// Convenience functions
-Transition MCMeshProps::hpTransition(const OVM::HalfFaceHandle& hp) const
+list<HEH> MCMeshProps::haHalfedges(const HEH& ha) const
 {
-    OVM::FaceHandle p(mesh.face_handle(hp));
-    if ((hp.idx() % 2) == 0)
-        return get<PATCH_TRANSITION>(p);
-    else
-        return get<PATCH_TRANSITION>(p).invert();
-}
-
-void MCMeshProps::setHpTransition(const OVM::HalfFaceHandle& hp, const Transition& trans)
-{
-    auto p = mesh.face_handle(hp);
-    set<PATCH_TRANSITION>(p, (hp.idx() % 2) == 0 ? trans : trans.invert());
-}
-
-list<OVM::HalfEdgeHandle> MCMeshProps::haHalfedges(const OVM::HalfEdgeHandle& ha) const
-{
-    auto a = mesh.edge_handle(ha);
+    EH a = mesh().edge_handle(ha);
     if ((ha.idx() % 2) == 0)
         return ref<ARC_MESH_HALFEDGES>(a);
-    list<OVM::HalfEdgeHandle> haHes;
+    list<HEH> haHes;
     auto& aHes = ref<ARC_MESH_HALFEDGES>(a);
-    for (auto he : aHes)
-        haHes.emplace_front(mesh.opposite_halfedge_handle(he));
+    for (HEH he : aHes)
+        haHes.emplace_front(mesh().opposite_halfedge_handle(he));
     return haHes;
 }
 
-void MCMeshProps::setHaHalfedges(const OVM::HalfEdgeHandle& ha, const list<OVM::HalfEdgeHandle>& hes)
+void MCMeshProps::setHaHalfedges(const HEH& ha, const list<HEH>& hes)
 {
-    auto a = mesh.edge_handle(ha);
+    EH a = mesh().edge_handle(ha);
     if ((ha.idx() % 2) == 0)
     {
         set<ARC_MESH_HALFEDGES>(a, hes);
@@ -45,25 +31,25 @@ void MCMeshProps::setHaHalfedges(const OVM::HalfEdgeHandle& ha, const list<OVM::
     }
     auto& aHes = ref<ARC_MESH_HALFEDGES>(a);
     aHes.clear();
-    for (auto he : hes)
-        aHes.emplace_front(mesh.opposite_halfedge_handle(he));
+    for (HEH he : hes)
+        aHes.emplace_front(mesh().opposite_halfedge_handle(he));
 }
 
-set<OVM::HalfFaceHandle> MCMeshProps::hpHalffaces(const OVM::HalfFaceHandle& hp) const
+set<HFH> MCMeshProps::hpHalffaces(const HFH& hp) const
 {
-    auto p = mesh.face_handle(hp);
+    FH p = mesh().face_handle(hp);
     if ((hp.idx() % 2) == 0)
         return ref<PATCH_MESH_HALFFACES>(p);
-    std::set<OVM::HalfFaceHandle> hpHfs;
+    std::set<HFH> hpHfs;
     auto& pHfs = ref<PATCH_MESH_HALFFACES>(p);
-    for (auto hf : pHfs)
-        hpHfs.insert(mesh.opposite_halfface_handle(hf));
+    for (HFH hf : pHfs)
+        hpHfs.insert(mesh().opposite_halfface_handle(hf));
     return hpHfs;
 }
 
-void MCMeshProps::setHpHalffaces(const OVM::HalfFaceHandle& hp, const std::set<OVM::HalfFaceHandle>& hfs)
+void MCMeshProps::setHpHalffaces(const HFH& hp, const std::set<HFH>& hfs)
 {
-    auto p = mesh.face_handle(hp);
+    FH p = mesh().face_handle(hp);
     if ((hp.idx() % 2) == 0)
     {
         set<PATCH_MESH_HALFFACES>(p, hfs);
@@ -71,8 +57,54 @@ void MCMeshProps::setHpHalffaces(const OVM::HalfFaceHandle& hp, const std::set<O
     }
     auto& pHfs = ref<PATCH_MESH_HALFFACES>(p);
     pHfs.clear();
-    for (auto hf : hfs)
-        pHfs.insert(mesh.opposite_halfface_handle(hf));
+    for (HFH hf : hfs)
+        pHfs.insert(mesh().opposite_halfface_handle(hf));
+}
+
+NodeType MCMeshProps::nodeType(const VH& n) const
+{
+    auto& mcMesh = mesh();
+
+    NodeType type;
+    int nSingularArcs = 0;
+    for (EH a : mcMesh.vertex_edges(n))
+        if (get<IS_SINGULAR>(a))
+            nSingularArcs++;
+    if (nSingularArcs == 0)
+        type.first = SingularNodeType::REGULAR;
+    else if (nSingularArcs == 2)
+        type.first = SingularNodeType::SEMI_SINGULAR;
+    else
+        type.first = SingularNodeType::SINGULAR;
+
+    if (isAllocated<IS_FEATURE_V>() && get<IS_FEATURE_V>(n))
+        type.second = FeatureNodeType::FEATURE;
+    else if (isAllocated<IS_FEATURE_E>())
+    {
+        int nFeatureArcs = 0;
+        int nNonFeatureSingularArcs = 0;
+        for (EH a : mcMesh.vertex_edges(n))
+            if (get<IS_FEATURE_E>(a))
+                nFeatureArcs++;
+            else if (get<IS_SINGULAR>(a))
+                nNonFeatureSingularArcs++;
+        if (nFeatureArcs == 0)
+            type.second = FeatureNodeType::REGULAR;
+        else if (nFeatureArcs == 2)
+        {
+            if (nNonFeatureSingularArcs != 0)
+                type.second = FeatureNodeType::SEMI_FEATURE_SINGULAR_BRANCH;
+            else
+                type.second = FeatureNodeType::SEMI_FEATURE;
+        }
+        else
+        {
+            // Should never happen, because these types of nodes should automatically have been assigned IS_FEATURE_V
+            assert(false);
+            type.second = FeatureNodeType::FEATURE;
+        }
+    }
+    return type;
 }
 
 } // namespace mc3d

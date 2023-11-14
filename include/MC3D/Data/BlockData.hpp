@@ -21,10 +21,10 @@ struct BlockData
     bool toroidal;
     bool selfadjacent;
     UVWDir axis; // along which axis the block is toroidal/selfadjacent
-    set<OVM::CellHandle> tets;
-    map<UVWDir, set<OVM::HalfFaceHandle>> halffaces; // halffaces by block face (POS/NEG U/V/W)
-    map<UVWDir, set<OVM::EdgeHandle>> edges;         // edges by block edge (binary combination of POS/NEG U/V/W)
-    map<UVWDir, OVM::VertexHandle> corners;          // vertices by block corner (ternary combination of POS/NEG U/V/W)
+    set<CH> tets;
+    map<UVWDir, set<HFH>> halffaces; // halffaces by block face (POS/NEG U/V/W)
+    map<UVWDir, set<EH>> edges;      // edges by block edge (binary combination of POS/NEG U/V/W)
+    map<UVWDir, VH> corners;         // vertices by block corner (ternary combination of POS/NEG U/V/W)
 };
 
 } // namespace mc3d

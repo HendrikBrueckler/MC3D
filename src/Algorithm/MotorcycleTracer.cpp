@@ -4,7 +4,8 @@ namespace mc3d
 {
 
 MotorcycleTracer::MotorcycleTracer(TetMeshProps& meshProps, MotorcycleQueue& mQ, bool simulateBC)
-    : TetMeshNavigator(meshProps), TetMeshManipulator(meshProps), _mQ(mQ), _qPops(0), _eSplits(0), _simulateBC(simulateBC)
+    : TetMeshNavigator(meshProps), TetMeshManipulator(meshProps), _mQ(mQ), _qPops(0), _eSplits(0),
+      _simulateBC(simulateBC)
 {
 }
 
@@ -35,7 +36,7 @@ MotorcycleTracer::RetCode MotorcycleTracer::traceNextMotorcycle()
     {
         Motorcycle mot = _localQ.top();
         _localQ.pop();
-        if (!_meshPropsC.mesh.is_deleted(mot.tet))
+        if (!meshProps().mesh().is_deleted(mot.tet))
         {
             // tet and edge havent been split
             auto ret = traceMotorcycle(mot);
@@ -64,31 +65,33 @@ void MotorcycleTracer::forEachChildMotorcycle(const Motorcycle& mot,
 {
     // tet and (possibly) edge have been split
     // Find all valid combinations of child tets and edges
-    list<OVM::EdgeHandle> validChildrenEdges;
+    list<EH> validChildrenEdges;
     validChildrenEdges.push_back(mot.edge);
-    list<OVM::CellHandle> validChildrenTets;
+    list<CH> validChildrenTets;
     validChildrenTets.push_back(mot.tet);
 
     Motorcycle motChild = mot;
     for (auto itTet = validChildrenTets.begin(); itTet != validChildrenTets.end();)
     {
-        if (_meshPropsC.mesh.is_deleted(*itTet))
+        if (meshProps().mesh().is_deleted(*itTet))
         {
-            const auto& tetsChildren = _meshPropsC.get<CHILD_CELLS>(*itTet);
-            for (auto child : tetsChildren)
+            const auto& tetsChildren = meshProps().get<CHILD_CELLS>(*itTet);
+            assert(!tetsChildren.empty());
+            for (CH child : tetsChildren)
                 validChildrenTets.push_back(child);
         }
         else
         {
             // Tet is valid
-            auto teItPair = _meshPropsC.mesh.cell_edges(*itTet);
-            vector<OVM::EdgeHandle> tetEdges(teItPair.first, teItPair.second);
+            auto teItPair = meshProps().mesh().cell_edges(*itTet);
+            vector<EH> tetEdges(teItPair.first, teItPair.second);
             for (auto itEdge = validChildrenEdges.begin(); itEdge != validChildrenEdges.end();)
             {
-                if (_meshPropsC.mesh.is_deleted(*itEdge))
+                if (meshProps().mesh().is_deleted(*itEdge))
                 {
-                    const auto& esChildren = _meshPropsC.get<CHILD_EDGES>(*itEdge);
-                    for (auto child : esChildren)
+                    const auto& esChildren = meshProps().get<CHILD_EDGES>(*itEdge);
+                    assert(!esChildren.empty());
+                    for (EH child : esChildren)
                         validChildrenEdges.push_back(child);
                     itEdge = validChildrenEdges.erase(itEdge);
                 }
@@ -140,14 +143,14 @@ MotorcycleTracer::RetCode MotorcycleTracer::traceMotorcycle(const Motorcycle& mo
     //                                             C
     //
     //  mot.edge is BC. New wall face is either BCD, BCA or BCN where N is the vtx created by splitting (half)edge DA.
-    const TetMesh& tetMesh = _meshPropsC.mesh;
+    const TetMesh& tetMesh = meshProps().mesh();
 
     // Gather the relevant mesh elements
     TetElements elems(TetMeshNavigator::getTetElements(mot.tet, mot.edge));
 
     // Determine if propagation direction passes through mot.tet
-    Vec3Q uvwA = _meshPropsC.get<CHART>(mot.tet).at(elems.vA);
-    Vec3Q uvwD = _meshPropsC.get<CHART>(mot.tet).at(elems.vD);
+    Vec3Q uvwA = meshProps().get<CHART>(mot.tet).at(elems.vA);
+    Vec3Q uvwD = meshProps().get<CHART>(mot.tet).at(elems.vD);
 
     int wallIsoCoord = mot.isoCoord();
     Q deltaA = uvwA[wallIsoCoord] - Q(mot.isoValue);
@@ -160,16 +163,16 @@ MotorcycleTracer::RetCode MotorcycleTracer::traceMotorcycle(const Motorcycle& mo
     bool isoFacetBCD = deltaD == 0;
 
     // The face that is to be marked as a wall
-    OVM::HalfFaceHandle newWallHf;
+    HFH newWallHf;
     // The edges to propagate across
-    OVM::HalfEdgeHandle heNext1;
-    OVM::HalfEdgeHandle heNext2;
+    HEH heNext1;
+    HEH heNext2;
 
     if ((!isoFacetCBA && !isoFacetBCD))
     {
         // Splitting is necessary
         Q t = deltaA / (uvwA[wallIsoCoord] - uvwD[wallIsoCoord]);
-        OVM::VertexHandle vN = TetMeshManipulator::splitHalfEdge(elems.heAD, mot.tet, t);
+        VH vN = TetMeshManipulator::splitHalfEdge(elems.heAD, mot.tet, t);
         _eSplits++;
 
         // Mark the newly created splitting face as a new MC wall
@@ -185,19 +188,19 @@ MotorcycleTracer::RetCode MotorcycleTracer::traceMotorcycle(const Motorcycle& mo
             return DEGENERATE_CHART;
         // Mark the isoFacet as a new MC wall
         newWallHf = isoFacetBCD ? elems.hfBCD : elems.hfCBA;
-        OVM::HalfEdgeHandle heCurrent = isoFacetBCD ? elems.heBC : tetMesh.opposite_halfedge_handle(elems.heBC);
+        HEH heCurrent = isoFacetBCD ? elems.heBC : tetMesh.opposite_halfedge_handle(elems.heBC);
 
         // Propagate to the other two edges of the wall face
         heNext1 = tetMesh.next_halfedge_in_halfface(heCurrent, newWallHf);
         heNext2 = tetMesh.prev_halfedge_in_halfface(heCurrent, newWallHf);
     }
 
-    OVM::FaceHandle newWall = tetMesh.face_handle(newWallHf);
+    FH newWall = tetMesh.face_handle(newWallHf);
     // Skip if already a wall or a boundary
-    if (_meshProps.get<IS_WALL>(newWall) || tetMesh.is_boundary(newWall))
+    if (meshProps().get<IS_WALL>(newWall) || tetMesh.is_boundary(newWall))
         return SUCCESS;
-    _meshProps.set<IS_WALL>(newWall, true);
-    _meshProps.set<WALL_DIST>(newWall, (float)mot.dist.get_d());
+    meshProps().set<IS_WALL>(newWall, true);
+    meshProps().set<WALL_DIST>(newWall, (float)mot.dist.get_d());
     newWalls.emplace_back(newWall);
 
     // only push the followup motorcycle into the queue if the edges are still alive
@@ -209,20 +212,18 @@ MotorcycleTracer::RetCode MotorcycleTracer::traceMotorcycle(const Motorcycle& mo
     return SUCCESS;
 }
 
-void MotorcycleTracer::propagateAcrossEdge(const Motorcycle& mot,
-                                           const OVM::HalfEdgeHandle& he,
-                                           const OVM::HalfFaceHandle& hfWall)
+void MotorcycleTracer::propagateAcrossEdge(const Motorcycle& mot, const HEH& he, const HFH& hfWall)
 {
-    const TetMesh& tetMesh = _meshPropsC.mesh;
+    const TetMesh& tetMesh = meshProps().mesh();
 
     // Elements needed for circulating around he
-    auto heOpp = tetMesh.opposite_halfedge_handle(he);
-    auto hfStart = tetMesh.adjacent_halfface_in_cell(hfWall, he);
-    auto hfStop = tetMesh.opposite_halfface_handle(
+    HEH heOpp = tetMesh.opposite_halfedge_handle(he);
+    HFH hfStart = tetMesh.adjacent_halfface_in_cell(hfWall, he);
+    HFH hfStop = tetMesh.opposite_halfface_handle(
         tetMesh.adjacent_halfface_in_cell(tetMesh.opposite_halfface_handle(hfWall), heOpp));
 
     assert(!tetMesh.is_boundary(he));
-    assert(!_meshPropsC.get<IS_SINGULAR>(tetMesh.edge_handle(he)));
+    assert(!meshProps().get<IS_SINGULAR>(tetMesh.edge_handle(he)));
     bool hasPropagated = false;
     int passed = 0;
     Transition totalTransition;
@@ -237,27 +238,29 @@ void MotorcycleTracer::propagateAcrossEdge(const Motorcycle& mot,
         hfStart,
         hfStop,
         [&hasPropagated, &passed, &insideOriginalTet, &totalTransition, &coords, &values, &mot, &heOpp, this](
-            const OVM::HalfFaceHandle& hf)
+            const HFH& hf)
         {
-            if (_meshPropsC.isAllocated<IS_ORIGINAL>()
-                && _meshPropsC.get<IS_ORIGINAL>(_meshPropsC.mesh.face_handle(hf)))
+            if (meshProps().isAllocated<IS_ORIGINAL_F>()
+                && meshProps().get<IS_ORIGINAL_F>(meshProps().mesh().face_handle(hf)))
                 insideOriginalTet = false;
-            totalTransition = totalTransition.chain(_meshPropsC.hfTransition(hf));
+            totalTransition = totalTransition.chain(meshProps().hfTransition<TRANSITION>(hf));
             Vec3i currentCoords = totalTransition.rotate(coords);
             Vec3Q currentValues = totalTransition.apply(values);
 
-            OVM::CellHandle nextCell = _meshPropsC.mesh.incident_cell(_meshPropsC.mesh.opposite_halfface_handle(hf));
+            CH nextCell = meshProps().mesh().incident_cell(meshProps().mesh().opposite_halfface_handle(hf));
             assert(nextCell.is_valid());
             Motorcycle motNew(nextCell,
-                              _meshPropsC.mesh.edge_handle(heOpp),
+                              meshProps().mesh().edge_handle(heOpp),
                               currentCoords,
                               currentValues[Motorcycle::isoCoord(currentCoords)],
                               currentValues[Motorcycle::propagationCoord(currentCoords)],
+                              0,
                               0);
             if (TetMeshNavigator::orientationRelativeToTet(motNew) != Orientation::OUTSIDE)
             {
                 hasPropagated = true;
-                motNew.dist = mot.dist + TetMeshNavigator::deltaDist(mot, motNew);
+                motNew.directDist = getDirectDistToOrigin(motNew);
+                motNew.dist = mot.dist + ::abs(motNew.directDist - mot.directDist);
                 // When inside original tet, mutex-like behaviour
                 // by inserting into local queue, which gets fully exhausted before next global queue mot is processed
                 if (insideOriginalTet)
@@ -273,22 +276,22 @@ void MotorcycleTracer::propagateAcrossEdge(const Motorcycle& mot,
     assert(hasPropagated);
 }
 
-bool MotorcycleTracer::isAlive(const OVM::EdgeHandle& e) const
+bool MotorcycleTracer::isAlive(const EH& e) const
 {
-    if (_meshPropsC.mesh.is_boundary(e))
+    if (meshProps().mesh().is_boundary(e))
         return false;
 
-    if (_meshPropsC.get<IS_SINGULAR>(e))
+    if (meshProps().get<IS_SINGULAR>(e))
         return false;
 
     // if simulating BC (and not splitting some toroidal/selfadjacent blocks after initial complex build)
     // any non-boundary non-singular edge is alive
-    if (_simulateBC && !_meshPropsC.isAllocated<MC_BLOCK_DATA>())
+    if (_simulateBC && !meshProps().isAllocated<MC_BLOCK_DATA>())
         return true;
 
     int wallFacesIncidentOnNewEdge = 0;
-    for (OVM::FaceHandle f : _meshPropsC.mesh.edge_faces(e))
-        if (_meshPropsC.get<IS_WALL>(f))
+    for (FH f : meshProps().mesh().edge_faces(e))
+        if (meshProps().get<IS_WALL>(f))
             wallFacesIncidentOnNewEdge++;
 
     // We check this before pushing followup walls to the queue
@@ -301,15 +304,15 @@ void MotorcycleTracer::clearNewWalls()
     newWalls.clear();
 }
 
-vector<OVM::FaceHandle> MotorcycleTracer::getNewWalls()
+vector<FH> MotorcycleTracer::getNewWalls()
 {
     for (auto itFace = newWalls.begin(); itFace != newWalls.end();)
     {
-        if (_meshPropsC.mesh.is_deleted(*itFace))
+        if (meshProps().mesh().is_deleted(*itFace))
         {
-            assert(_meshPropsC.isAllocated<CHILD_FACES>());
-            const auto& children = _meshPropsC.get<CHILD_FACES>(*itFace);
-            for (auto child : children)
+            assert(meshProps().isAllocated<CHILD_FACES>());
+            const auto& children = meshProps().get<CHILD_FACES>(*itFace);
+            for (FH child : children)
                 newWalls.push_back(child);
             itFace = newWalls.erase(itFace);
         }
@@ -319,7 +322,7 @@ vector<OVM::FaceHandle> MotorcycleTracer::getNewWalls()
         }
     }
 
-    return vector<OVM::FaceHandle>(newWalls.begin(), newWalls.end());
+    return vector<FH>(newWalls.begin(), newWalls.end());
 }
 
 } // namespace mc3d

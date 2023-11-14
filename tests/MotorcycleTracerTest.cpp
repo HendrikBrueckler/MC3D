@@ -22,11 +22,12 @@ class MotorcycleTracingTest : public FullToolChainTest
         ASSERT_EQ(reader.readSeamlessParam(), Reader::SUCCESS);
         ASSERT_EQ(init.initTransitions(), SingularityInitializer::SUCCESS);
         ASSERT_EQ(init.initSingularities(), SingularityInitializer::SUCCESS);
+        ASSERT_EQ(init.makeFeaturesConsistent(), SingularityInitializer::SUCCESS);
 
         meshProps.allocate<IS_WALL>();
-        meshProps.allocate<IS_ORIGINAL>();
-        for (auto f: meshRaw.faces())
-            meshProps.set<IS_ORIGINAL>(f, true);
+        for (FH f : meshRaw.faces())
+            if (meshRaw.is_boundary(f))
+                meshProps.set<IS_WALL>(f, true);
         meshProps.allocate<WALL_DIST>();
         meshProps.allocate<CHILD_CELLS>();
         meshProps.allocate<CHILD_EDGES>();

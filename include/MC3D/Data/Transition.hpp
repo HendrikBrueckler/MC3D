@@ -1,8 +1,8 @@
 #ifndef MC3D_TRANSITION_HPP
 #define MC3D_TRANSITION_HPP
 
-#include "MC3D/Types.hpp"
 #include "MC3D/Data/UVWDir.hpp"
+#include "MC3D/Types.hpp"
 
 #include <set>
 
@@ -11,7 +11,7 @@ namespace mc3d
 
 struct Transition
 {
-    const static set<Vec3i> OCTAHEDRAL_GROUP_ROT;
+    const static vector<Vec3i> OCTAHEDRAL_GROUP_ROT;
 
     template <typename VEC3T>
     static VEC3T rotate(const Vec3i& rotation, const VEC3T& vec)
@@ -32,7 +32,8 @@ struct Transition
     Transition(Vec3i rotation_ = {1, 2, 3}, Vec3Q translation_ = {0, 0, 0})
         : rotation(rotation_), translation(translation_)
     {
-        assert(OCTAHEDRAL_GROUP_ROT.find(rotation) != OCTAHEDRAL_GROUP_ROT.end());
+        assert(std::find(OCTAHEDRAL_GROUP_ROT.begin(), OCTAHEDRAL_GROUP_ROT.end(), rotation_)
+               != OCTAHEDRAL_GROUP_ROT.end());
     }
 
     bool operator==(const Transition& tr) const;
@@ -48,8 +49,8 @@ struct Transition
 
     UVWDir rotate(const UVWDir& dir) const
     {
-        auto posComponent = dir & UVWDir::POS_U_POS_V_POS_W;
-        auto negComponent = dir & UVWDir::NEG_U_NEG_V_NEG_W;
+        UVWDir posComponent = dir & UVWDir::POS_U_POS_V_POS_W;
+        UVWDir negComponent = dir & UVWDir::NEG_U_NEG_V_NEG_W;
         return toDir(rotate<Vec3i>(rotation, toVec(negComponent)))
                | toDir(rotate<Vec3i>(rotation, toVec(posComponent)));
     }

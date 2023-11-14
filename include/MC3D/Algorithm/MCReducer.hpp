@@ -61,7 +61,7 @@ class MCReducer : public virtual MCMeshManipulator
      * @return true if \p p is reducible
      * @return false else
      */
-    bool isRemovable(const OVM::FaceHandle& p,
+    bool isRemovable(const FH& p,
                      bool preserveSingularPatches,
                      bool avoidSelfadjacency,
                      bool preserveFeatures) const;
@@ -75,7 +75,7 @@ class MCReducer : public virtual MCMeshManipulator
      * @return true if \p a is reducible
      * @return false else
      */
-    bool isRemovable(const OVM::EdgeHandle& a) const;
+    bool isRemovable(const EH& a) const;
 
     /**
      * @brief Query whether \p n is locally non-minimal and can be removed by merging its exactly 2 incident arcs
@@ -86,7 +86,7 @@ class MCReducer : public virtual MCMeshManipulator
      * @return true if \p n is reducible
      * @return false else
      */
-    bool isRemovable(const OVM::VertexHandle& n) const;
+    bool isRemovable(const VH& n) const;
 
   private:
     /**
@@ -102,7 +102,7 @@ class MCReducer : public virtual MCMeshManipulator
      * @param possiblyRemovableAs IN: updated arcs, OUT: empty
      * @param possiblyRemovableNs IN: updated nodes, OUT: updated nodes + new updated nodes
      */
-    void removeRemovableArcs(set<OVM::EdgeHandle>& possiblyRemovableAs, set<OVM::VertexHandle>& possiblyRemovableNs);
+    void removeRemovableArcs(set<EH>& possiblyRemovableAs, set<VH>& possiblyRemovableNs);
 
     /**
      * @brief Given a set of updated nodes \p possiblyRemovableNs, remove all of its removable nodes. Note, that in a
@@ -113,7 +113,7 @@ class MCReducer : public virtual MCMeshManipulator
      *
      * @param possiblyRemovableNs IN: updated nodes, OUT: empty
      */
-    void removeRemovableNodes(set<OVM::VertexHandle>& possiblyRemovableNs);
+    void removeRemovableNodes(set<VH>& possiblyRemovableNs);
 
     /**
      * @brief Priority ordering: highest min patch distance from motorcycle origin first
@@ -123,13 +123,13 @@ class MCReducer : public virtual MCMeshManipulator
     {
         GreatestDistComp(const MCMeshProps& mcMeshProps);
 
-        bool operator()(const OVM::FaceHandle& p1, const OVM::FaceHandle& p2) const;
+        bool operator()(const FH& p1, const FH& p2) const;
 
       private:
         const MCMeshProps& _mcMeshProps;
     };
 
-    using PatchQueue = std::priority_queue<OVM::FaceHandle, std::deque<OVM::FaceHandle>, GreatestDistComp>;
+    using PatchQueue = std::priority_queue<FH, std::deque<FH>, GreatestDistComp>;
     PatchQueue _pQ;                       // Use to sort patches by remove-priority
     bool _preserveSingularPatches = true; // Remember whether current reduction routine should preserve singular patches
     bool _preserveFeatures = true;        // Remember whether current reduction routine should preserve features

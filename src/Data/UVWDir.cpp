@@ -47,7 +47,7 @@ const vector<UVWDir> UNSIGNED_DIM_1_DIRS{
 vector<UVWDir> compose(UVWDir dir1, const vector<UVWDir>& base)
 {
     vector<UVWDir> dirs;
-    for (auto baseDir : base)
+    for (UVWDir baseDir : base)
         if ((dir1 & baseDir) == dir1)
             dirs.emplace_back(baseDir);
     return dirs;
@@ -56,7 +56,7 @@ vector<UVWDir> compose(UVWDir dir1, const vector<UVWDir>& base)
 vector<UVWDir> decompose(UVWDir dir, const vector<UVWDir>& base)
 {
     vector<UVWDir> dirs;
-    for (auto baseDir : base)
+    for (UVWDir baseDir : base)
         if ((dir & baseDir) == baseDir)
             dirs.emplace_back(baseDir);
     return dirs;
@@ -79,8 +79,8 @@ UVWDir operator~(UVWDir dir1)
 
 UVWDir operator-(UVWDir dir1)
 {
-    auto vec1 = toVec(dir1 & (UVWDir::POS_U | UVWDir::POS_V | UVWDir::POS_W));
-    auto vec2 = toVec(dir1 & (UVWDir::NEG_U | UVWDir::NEG_V | UVWDir::NEG_W));
+    Vec3i vec1 = toVec(dir1 & (UVWDir::POS_U | UVWDir::POS_V | UVWDir::POS_W));
+    Vec3i vec2 = toVec(dir1 & (UVWDir::NEG_U | UVWDir::NEG_V | UVWDir::NEG_W));
 
     return toDir(-vec1) | toDir(-vec2);
 }

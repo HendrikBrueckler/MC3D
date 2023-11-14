@@ -5,8 +5,7 @@
 #include "MC3D/Mesh/TetMeshNavigator.hpp"
 #include "MC3D/Mesh/TetMeshProps.hpp"
 
-#include "MC3D/Data/NodeCoordination.hpp"
-
+#include "MC3D/Data/NodeType.hpp"
 namespace mc3d
 {
 
@@ -32,7 +31,7 @@ class MCMeshNavigator : public virtual TetMeshNavigator
      * @return true if arc is embedded between exactly 2 equiplanar patches
      * @return false else
      */
-    bool isFlatArc(const OVM::EdgeHandle& a) const;
+    bool isFlatArc(const EH& a) const;
 
     /**
      * @brief Whether an arc is embedded between exactly 2 equiplanar patches of block b,
@@ -43,7 +42,7 @@ class MCMeshNavigator : public virtual TetMeshNavigator
      * @return true if arc is embedded between exactly 2 equiplanar patches of b
      * @return false else
      */
-    bool isFlatInBlock(const OVM::EdgeHandle& a, const OVM::CellHandle& b) const;
+    bool isFlatInBlock(const EH& a, const CH& b) const;
 
     /**
      * @brief Split the mapping of original mesh edges to \p a in two
@@ -54,10 +53,7 @@ class MCMeshNavigator : public virtual TetMeshNavigator
      * @param a1has OUT: ordered list of edges on the segment from[a] -> n
      * @param a2has OUT: ordered list of edges on the segment n -> to[a]
      */
-    void partitionArcEdgesAtNode(const OVM::EdgeHandle& a,
-                                 const OVM::VertexHandle& n,
-                                 list<OVM::HalfEdgeHandle>& a1has,
-                                 list<OVM::HalfEdgeHandle>& a2has) const;
+    void partitionArcEdgesAtNode(const EH& a, const VH& n, list<HEH>& a1has, list<HEH>& a2has) const;
 
     /**
      * @brief Split the mapping of original mesh halffaces to \p p in two
@@ -70,12 +66,8 @@ class MCMeshNavigator : public virtual TetMeshNavigator
      * @param p1hfs OUT: set of halffaces on the front side of pSplit1
      * @param p2hfs OUT: set of halffaces on the front side of p - pSplit1
      */
-    void partitionPatchHfsAtArc(const OVM::FaceHandle& p,
-                                const OVM::FaceHandle& pSplit1,
-                                const OVM::FaceHandle& pSplit2,
-                                const OVM::EdgeHandle& a,
-                                set<OVM::HalfFaceHandle>& p1hfs,
-                                set<OVM::HalfFaceHandle>& p2hfs) const;
+    void partitionPatchHfsAtArc(
+        const FH& p, const FH& pSplit1, const FH& pSplit2, const EH& a, set<HFH>& p1hfs, set<HFH>& p2hfs) const;
 
     /**
      * @brief Split the mapping of original mesh tets to \p b in two
@@ -87,11 +79,7 @@ class MCMeshNavigator : public virtual TetMeshNavigator
      * @param b1tets OUT: set of tets of bSplit1
      * @param b2tets OUT: set of tets of b - bSplit1
      */
-    void partitionBlockTetsAtPatch(const OVM::CellHandle& b,
-                                   const OVM::CellHandle& bSplit1,
-                                   const OVM::FaceHandle& p,
-                                   set<OVM::CellHandle>& b1tets,
-                                   set<OVM::CellHandle>& b2tets) const;
+    void partitionBlockTetsAtPatch(const CH& b, const CH& bSplit1, const FH& p, set<CH>& b1tets, set<CH>& b2tets) const;
 
     /**
      * @brief Merge the mapped mesh halfedges of \p a1 and \p a2 into
@@ -102,10 +90,7 @@ class MCMeshNavigator : public virtual TetMeshNavigator
      * @param n IN: Node to remove ( \p a1 and \p a2 need to be connected via this node)
      * @param aHes OUT: sequence of merged halfedges in order of from/to[a1] -> n -> from/to[a2]
      */
-    void joinArcEdgesAtNode(const OVM::EdgeHandle& a1,
-                            const OVM::EdgeHandle& a2,
-                            const OVM::VertexHandle& n,
-                            list<OVM::HalfEdgeHandle>& aHes) const;
+    void joinArcEdgesAtNode(const EH& a1, const EH& a2, const VH& n, list<HEH>& aHes) const;
 
     /**
      * @brief Merge the mapped mesh halffaces of \p p1 and \p p2 into
@@ -116,10 +101,7 @@ class MCMeshNavigator : public virtual TetMeshNavigator
      * @param a IN: Arc to remove ( \p p1 and \p p2 need to be connected via this arc)
      * @param pHfs OUT: set of merged halffaces frontfacing wrt \p p1
      */
-    void joinPatchFacesAtArc(const OVM::FaceHandle& p1,
-                             const OVM::FaceHandle& p2,
-                             const OVM::EdgeHandle& a,
-                             set<OVM::HalfFaceHandle>& pHfs) const;
+    void joinPatchFacesAtArc(const FH& p1, const FH& p2, const EH& a, set<HFH>& pHfs) const;
 
     /**
      * @brief Sort the halfarcs given in \p harcs so that they form a connected cycle
@@ -128,91 +110,38 @@ class MCMeshNavigator : public virtual TetMeshNavigator
      *
      *
      * @param harcs IN: halfarcs to order
-     * @return vector<OVM::HalfEdgeHandle> sequence of ordered halfarcs forming patch with planar/annular connectivity
+     * @return vector<HEH> sequence of ordered halfarcs forming patch with planar/annular connectivity
      */
-    vector<OVM::HalfEdgeHandle> orderPatchHalfarcs(const set<OVM::HalfEdgeHandle>& harcs) const;
+    vector<HEH> orderPatchHalfarcs(const set<HEH>& harcs) const;
 
     /**
-     * @brief Get the sequence of boundary halfarcs of a halfpatch sorted by their direction
+     * @brief Get the sequence of boundary halfarcs of a halfpatch sorted by their direction.
+     *        This is evaluated in the incident cell of \p hp or (if on boundary) the incident cell
+     *        of opposite( \p hp ).
      *
      * @param hp IN: Halfpatch to retrieve halfarcs for
-     * @return map<UVWDir, vector<OVM::HalfEdgeHandle>> sequence of arcs for each of the 4 quadrilateral sides
+     * @return map<UVWDir, vector<HEH>> sequence of arcs for each of the 4 quadrilateral sides
      */
-    map<UVWDir, vector<OVM::HalfEdgeHandle>> halfpatchHalfarcsByDir(const OVM::HalfFaceHandle& hp) const;
+    map<UVWDir, vector<HEH>> halfpatchHalfarcsByDir(const HFH& hp) const;
 
     /**
      * @brief Get the 4 corners of a halfpatch in the order they would be covered by the halfpatched
      *        halfarcs.
      *
      * @param hp IN: Halfpatch to retrieve corners for
-     * @return vector<OVM::VertexHandle> 4 ordered corner nodes of the halfpatch
+     * @return vector<VH> 4 ordered corner nodes of the halfpatch
      */
-    vector<OVM::VertexHandle> orderedHalfpatchCorners(const OVM::HalfFaceHandle& hp) const;
+    vector<VH> orderedHalfpatchCorners(const HFH& hp) const;
 
     /**
      * @brief Retrieve the direction of \p ha in the coordinate system of \p b .
      *        \p b must be internally transition-free
      *
-     * @param ha halfarc
-     * @param b block
+     * @param ha IN: halfarc
+     * @param b IN: block
      * @return UVWDir signed direction of \p ha in coord system of \p b
      */
-    UVWDir halfarcDirInBlock(const OVM::HalfEdgeHandle& ha, const OVM::CellHandle& b) const;
-
-    /**
-     * @brief Get the node type of \p n (regarding regularity/singularity)
-     *
-     * @param n IN: node
-     * @return NodeType type of \p n (regarding regularity/singularity)
-     */
-    NodeType nodeType(const OVM::VertexHandle& n) const;
-
-    /**
-     * @brief Get the coordination of node \p n (polymorphic). Use nc.nodeType() to infer actual type
-     *
-     * @param n IN: node
-     * @param bRef: IN: reference block (incident on \p n )
-     * @param principalDir IN: special direction in coord system of \p bRef (must be singular halfarc dir, if exists)
-     * @return std::shared_ptr<NodeCoordination>
-     */
-    std::shared_ptr<NodeCoordination> getNodeCoordination(const OVM::VertexHandle& n,
-                                                          const OVM::CellHandle& bRef,
-                                                          OVM::HalfEdgeHandle haPrincipal
-                                                          = OVM::HalfEdgeHandle(-1)) const;
-
-    /**
-     * @brief Get a collection of all elements incident on \p n indexed by their
-     *        spatial position relative to \p n in the MC.
-     *        Directions are given using cyclic-ordered integer keys representing the symmetry
-     *        of the node along the singular arc crossing it
-     *        \p n must have 2 singular arcs incident on it and
-     *        \p principalDir may be used to signify one of these arcs directions as the principal direction
-     *        in the coord system of \p bRef
-     *
-     * @param n IN: semi singular node
-     * @param bRef IN: block incident on \p n
-     * @param principalDir IN: singular arc direction in coord system of \p bRef
-     * @return NonSingNodeCoordination collection of all elements incident on \p n indexed by their
-     *                          spatial position relative to \p n in the MC
-     */
-    NonSingNodeCoordination nonSingularNodeCoordination(const OVM::VertexHandle& n,
-                                                        const OVM::CellHandle& bRef,
-                                                        OVM::HalfEdgeHandle haPrincipal
-                                                        = OVM::HalfEdgeHandle(-1)) const;
-
-    /**
-     * @brief Get a collection of all elements incident on \p n indexed by their
-     *        spatial position relative to \p n in the MC.
-     *        The singular node coordination will be expressed as a semisingular/regular
-     *        coordinations per outgoing halfedge of \p n . The elements referenced in these
-     *        "partial" coordinations are non-disjoint between multiple "partial" coordinations.
-     *
-     * @param n IN: singular node
-     * @param bRef IN: block incident on \p n
-     * @return SingNodeCoordination collection of all elements incident on \p n indexed by their
-     *                          spatial position relative to the outgoing halfarcs of \p n
-     */
-    SingNodeCoordination singularNodeCoordination(const OVM::VertexHandle& n, const OVM::CellHandle& bRef) const;
+    UVWDir halfarcDirInBlock(const HEH& ha, const CH& b) const;
 
     /**
      * @brief Fills \p b2trans with the transitions of blocks incident on \p n .
@@ -221,27 +150,63 @@ class MCMeshNavigator : public virtual TetMeshNavigator
      * @param bRef IN: reference block for which the reference transition is \p transRef
      * @param transRef IN: reference transition of block \p bRef , all output transitions will be chained onto this
      *                     initial transition
-     * @return map<OVM::CellHandle> transitions of blocks incident on n of \p nc (chained onto \p transRef )
+     * @return map<CH> transitions of blocks incident on n (chained onto \p transRef )
      */
-    map<OVM::CellHandle, Transition> determineTransitionsAroundNode(const OVM::VertexHandle& n,
-                                                                    const OVM::CellHandle& bRef,
-                                                                    const Transition& transRef) const;
+    map<CH, Transition> determineTransitionsAroundNode(const VH& n, const CH& bRef, const Transition& transRef) const;
+
+    /**
+     * @brief Fills \p b2trans with the transitions of blocks incident on \p a .
+     *
+     * @param a IN: arc around which block transitions should be determined
+     * @param bRef IN: reference block for which the reference transition is \p transRef
+     * @param transRef IN: reference transition of block \p bRef , all output transitions will be chained onto this
+     *                     initial transition
+     * @return map<CH> transitions of blocks incident on a (chained onto \p transRef )
+     */
+    map<CH, Transition> determineTransitionsAroundArc(const EH& a, const CH& bRef, const Transition& transRef) const;
+
+    /**
+     * @brief Whether arc has been assigned 0 length in quantization
+     *
+     * @param a IN: arc
+     * @return true if 0-length
+     * @return false if no quantization performed or non-zero length
+     */
+    bool isZeroArc(const EH& a) const;
+
+    /**
+     * @brief Whether patch has been assigned 0 area in quantization
+     *
+     * @param p IN: patch
+     * @return true if 0-area
+     * @return false if no quantization performed or non-zero area
+     */
+    bool isZeroPatch(const FH& p) const;
+
+    /**
+     * @brief Whether block has been assigned 0 volume in quantization
+     *
+     * @param p IN: block
+     * @return true if 0-volume
+     * @return false if no quantization performed or non-zero volume
+     */
+    bool isZeroBlock(const CH& b) const;
 
     /**
      * @brief Get the patch shared by \p as if exists
      *
      * @param as IN: arcs which might share a patch
-     * @return OVM::FaceHandle patch shared by \p as if exists else invalid handle
+     * @return FH patch shared by \p as if exists else invalid handle
      */
-    vector<OVM::FaceHandle> sharedPatches(const vector<OVM::EdgeHandle>& as) const;
+    vector<FH> sharedPatches(const vector<EH>& as) const;
 
     /**
      * @brief Get the block shared by \p ps if exists
      *
      * @param ps IN: patches which might share a block
-     * @return OVM::FaceHandle block shared by \p ps if exists else invalid handle
+     * @return FH block shared by \p ps if exists else invalid handle
      */
-    vector<OVM::CellHandle> sharedBlocks(const vector<OVM::FaceHandle>& ps) const;
+    vector<CH> sharedBlocks(const vector<FH>& ps) const;
 
     /**
      * @brief Whether two patches \p p1 and \p p2 sharing an arc \p aShared are aligned
@@ -253,8 +218,7 @@ class MCMeshNavigator : public virtual TetMeshNavigator
      * @return true if first halfpatches of \p p1 and \p p2 are aligned
      * @return false else
      */
-    bool
-    patchFrontsAreAligned(const OVM::FaceHandle& p1, const OVM::FaceHandle& p2, const OVM::EdgeHandle& aShared) const;
+    bool patchFrontsAreAligned(const FH& p1, const FH& p2, const EH& aShared) const;
 
     /**
      * @brief Retrieve the normal direction of \p hp in the coordinate system of its incident block
@@ -263,7 +227,7 @@ class MCMeshNavigator : public virtual TetMeshNavigator
      * @param hp IN: halfpatch
      * @return UVWDir normal direction of \p hp in the coordinate system of its incident block
      */
-    UVWDir halfpatchNormalDir(const OVM::HalfFaceHandle& hp) const;
+    UVWDir halfpatchNormalDir(const HFH& hp) const;
 
     /**
      * @brief Retrieve the UVW of the vertex of \p n in the coordinate system of \p b
@@ -273,7 +237,17 @@ class MCMeshNavigator : public virtual TetMeshNavigator
      * @param b block containing \p n
      * @return Vec3Q UVW of the vertex of \p n in the coordinate system of \p b
      */
-    Vec3Q nodeUVWinBlock(const OVM::VertexHandle& n, const OVM::CellHandle& b) const;
+    Vec3Q nodeUVWinBlock(const VH& n, const CH& b) const;
+
+    /**
+     * @brief Retrieve the IGM of the vertex of \p n in the coordinate system of \p b
+     *        which must be internally transition-free
+     *
+     * @param n node
+     * @param b block containing \p n
+     * @return Vec3Q IGM of the vertex of \p n in the coordinate system of \p b
+     */
+    Vec3Q nodeIGMinBlock(const VH& n, const CH& b) const;
 
     /**
      * @brief Struct to store info about non-branched sequences of singular arcs
@@ -282,9 +256,9 @@ class MCMeshNavigator : public virtual TetMeshNavigator
     {
         int id;
         bool cyclic;
-        OVM::VertexHandle nFrom;
-        OVM::VertexHandle nTo;
-        vector<OVM::HalfEdgeHandle> pathHas; // This is empty when representing an isolated critical node
+        VH nFrom;
+        VH nTo;
+        vector<HEH> pathHas; // This is empty when representing an isolated critical node
         int length;
     };
 
@@ -294,9 +268,9 @@ class MCMeshNavigator : public virtual TetMeshNavigator
     struct BoundaryRegion
     {
         bool annular;
-        set<OVM::VertexHandle> ns;
-        set<OVM::HalfFaceHandle> hps;
-        vector<OVM::HalfEdgeHandle> boundaryHas;
+        set<VH> ns;
+        set<HFH> hps;
+        vector<HEH> boundaryHas;
     };
 
     /**
@@ -310,9 +284,9 @@ class MCMeshNavigator : public virtual TetMeshNavigator
      * directed!)
      */
     void getCriticalLinks(vector<CriticalLink>& criticalLinks,
-                          map<OVM::EdgeHandle, int>& a2criticalLinkIdx,
-                          map<OVM::VertexHandle, vector<int>>& n2criticalLinksOut,
-                          map<OVM::VertexHandle, vector<int>>& n2criticalLinksIn,
+                          map<EH, int>& a2criticalLinkIdx,
+                          map<VH, vector<int>>& n2criticalLinksOut,
+                          map<VH, vector<int>>& n2criticalLinksIn,
                           bool includeFeatures = false) const;
 
     /**
@@ -321,8 +295,50 @@ class MCMeshNavigator : public virtual TetMeshNavigator
      * @param boundaryRegions OUT: collection of all boundary regions
      * @param hpBoundary2boundaryRegionIdx OUT: mapping of each surface halfpatch to its containing surface
      */
-    void getBoundaryRegions(vector<BoundaryRegion>& boundaryRegions,
-                            map<OVM::HalfFaceHandle, int>& hpBoundary2boundaryRegionIdx) const;
+    void getBoundaryRegions(vector<BoundaryRegion>& boundaryRegions, map<HFH, int>& hpBoundary2boundaryRegionIdx) const;
+
+    /**
+     * @brief Assert that all crucial properties of the MC volume decomposition are maintained
+     *        Does nothing if not compiled without NDEBUG flag.
+     *
+     * @param reducibility IN: whether to check for reducibility (by block merging)
+     * @param exhaustive IN: whether to perform additional, more costly checks
+     */
+    void assertValidMC(bool reducibility, bool exhaustive) const;
+
+    /**
+     * @brief Check whether arc a is a manifold curve (aside from possible selfadjacency).
+     *        Does nothing if not compiled without NDEBUG flag.
+     *
+     * @param a IN: arc
+     */
+    void assertManifoldArc(const EH& a) const;
+
+    /**
+     * @brief Check whether patch a is a manifold surface (aside from possible selfadjacency)
+     *        Does nothing if not compiled without NDEBUG flag.
+     *
+     * @param p IN: patch
+     */
+    void assertManifoldPatch(const FH& p) const;
+
+    /**
+     * @brief Check whether block b is a manifold volume (aside from possible selfadjacency)
+     *        Does nothing if not compiled without NDEBUG flag.
+     *
+     * @param b IN: block
+     */
+    void assertManifoldBlock(const CH& b) const;
+
+    /**
+     * @brief Properties of the MC meta mesh
+     *
+     * @return const MCMeshProps& the MC meta mesh properties
+     */
+    const MCMeshProps& mcMeshProps() const
+    {
+        return _mcMeshPropsC;
+    }
 
   protected:
     /**
@@ -335,14 +351,15 @@ class MCMeshNavigator : public virtual TetMeshNavigator
      * @param n2criticalLinksOut IN/OUT: mappings are updated for the new path
      * @param n2criticalLinksIn IN/OUT: mappings are updated for the new path
      */
-    void traceCriticalLink(const OVM::HalfEdgeHandle& haStart,
+    void traceCriticalLink(const HEH& haStart,
                            const vector<bool>& arcIsCritical,
-                           set<OVM::VertexHandle>& nsStop,
+                           set<VH>& nsStop,
                            vector<CriticalLink>& criticalLinks,
-                           map<OVM::EdgeHandle, int>& a2criticalLinkIdx,
-                           map<OVM::VertexHandle, vector<int>>& n2criticalLinksOut,
-                           map<OVM::VertexHandle, vector<int>>& n2criticalLinksIn) const;
+                           map<EH, int>& a2criticalLinkIdx,
+                           map<VH, vector<int>>& n2criticalLinksOut,
+                           map<VH, vector<int>>& n2criticalLinksIn) const;
 
+  private:
     const MCMeshProps& _mcMeshPropsC;
 };
 

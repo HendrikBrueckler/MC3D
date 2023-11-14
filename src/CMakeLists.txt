@@ -39,10 +39,10 @@ list(APPEND MC3D_SOURCE_LIST
      "Algorithm/MCReducer.cpp"
      "Algorithm/MotorcycleSpawner.cpp"
      "Algorithm/MotorcycleTracer.cpp"
+     "Algorithm/TetRemesher.cpp"
      "Data/Motorcycle.cpp"
      "Data/Transition.cpp"
      "Data/UVWDir.cpp"
-     "Data/NodeCoordination.cpp"
      "Interface/MCGenerator.cpp"
      "Interface/Reader.cpp"
      "Interface/Writer.cpp"
@@ -83,8 +83,8 @@ configure_package_config_file(../MC3DConfig.cmake.in
 ### Include own headers with public access
 target_include_directories(MC3D
                            PUBLIC
-                           "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/../include>"
-                           "$<INSTALL_INTERFACE:${INSTALL_INCLUDE_DIR}>"
+                           "$<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/include>"
+                           "$<INSTALL_INTERFACE:${MC3D_INSTALL_INCLUDE_DIR}>"
                            "$<BUILD_INTERFACE:${GMP_INCLUDE_DIRS}>"
                            "$<BUILD_INTERFACE:${GMPXX_INCLUDE_DIR}>"
                            "$<INSTALL_INTERFACE:${GMP_INCLUDE_DIRS}>"
