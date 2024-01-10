@@ -39,12 +39,24 @@ MCGenerator::RetCode MCGenerator::traceMC(bool splitTori, bool splitSelfadjacenc
     meshProps().allocate<CHILD_FACES>({});
     if (keepOrigProps)
     {
-        meshProps().allocate<CHART_ORIG>();
-        for (CH tet : meshProps().mesh().cells())
-            meshProps().set<CHART_ORIG>(tet, meshProps().ref<CHART>(tet));
-        meshProps().allocate<TRANSITION_ORIG>();
-        for (FH f : meshProps().mesh().faces())
-            meshProps().set<TRANSITION_ORIG>(f, meshProps().ref<TRANSITION>(f));
+        if (!meshProps().isAllocated<CHART_ORIG>())
+        {
+            meshProps().allocate<CHART_ORIG>();
+            for (CH tet : meshProps().mesh().cells())
+                meshProps().set<CHART_ORIG>(tet, meshProps().ref<CHART>(tet));
+        }
+        if (!meshProps().isAllocated<TRANSITION_ORIG>())
+        {
+            meshProps().allocate<TRANSITION_ORIG>();
+            for (FH f : meshProps().mesh().faces())
+                meshProps().set<TRANSITION_ORIG>(f, meshProps().ref<TRANSITION>(f));
+        }
+        if (!meshProps().isAllocated<IS_ORIGINAL_V>())
+        {
+            meshProps().allocate<IS_ORIGINAL_V>(false);
+            for (VH v: meshProps().mesh().vertices())
+                meshProps().set<IS_ORIGINAL_V>(v, true);
+        }
     }
 
     LOG(INFO) << "Tracing the motorcycle complex";
