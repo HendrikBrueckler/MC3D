@@ -22,6 +22,7 @@ list(APPEND MC3D_LIB_LIST ${GMP_LIBRARIES} ${GMPXX_LIBRARY})
 # glog
 if (NOT TARGET glog::glog)
     if(EXISTS "${PROJECT_SOURCE_DIR}/extern/glog/CMakeLists.txt")
+        set (WITH_GFLAGS OFF CACHE BOOL "" FORCE)
         add_subdirectory(${PROJECT_SOURCE_DIR}/extern/glog extern/glog EXCLUDE_FROM_ALL)
     else()
         find_package(glog REQUIRED)
