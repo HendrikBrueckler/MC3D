@@ -13,4 +13,4 @@
 	url = https://github.com/HendrikBrueckler/TrulySeamless3D.git
 [submodule "extern/volumeshos"]
 	path = extern/volumeshos
-	url = git@github.com:HendrikBrueckler/volumeshOS-prv.git
+	url = https://github.com/HendrikBrueckler/volumeshOS-prv.git
