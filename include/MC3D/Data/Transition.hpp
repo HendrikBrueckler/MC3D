@@ -37,6 +37,8 @@ struct Transition
     }
 
     bool operator==(const Transition& tr) const;
+    bool operator!=(const Transition& tr) const;
+    bool operator<(const Transition& tr) const;
 
     bool isIdentity() const;
     bool rotationIsIdentity() const;

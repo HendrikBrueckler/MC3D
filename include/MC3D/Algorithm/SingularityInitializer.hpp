@@ -46,6 +46,7 @@ class SingularityInitializer : public virtual TetMeshManipulator
     /**
      * @brief Add feature markers where necessary, so that feature curves are always cyclic or bounded
      *        by feature vertices, and feature surfaces are always closed or bounded by feature curves.
+     *        To not collide with other feature IDs, consistency-mandated features are marked as INT_MAX.
      *
      * @return RetCode SUCCESS
      */

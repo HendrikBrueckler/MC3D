@@ -24,6 +24,15 @@ class MCMeshNavigator : public virtual TetMeshNavigator
     MCMeshNavigator(const TetMeshProps& meshProps);
 
     /**
+     * @brief Variant of adjacent_halfface_in_cell that is safer in case of selfadjacency.
+     *
+     * @param hp IN: halfpatch
+     * @param ha IN: halfarc (part of \p hp )
+     * @return HFH halfpatch that is adjacent to \p hp across \p ha (volume connected)
+     */
+    HFH safeAdjacentHalffaceInBlock(HFH hp, HEH ha) const;
+
+    /**
      * @brief Whether an arc is embedded between exactly 2 equiplanar patches,
      *        i.e. the dihedral angles formed around the arc are all 180°
      *
@@ -150,9 +159,10 @@ class MCMeshNavigator : public virtual TetMeshNavigator
      * @param bRef IN: reference block for which the reference transition is \p transRef
      * @param transRef IN: reference transition of block \p bRef , all output transitions will be chained onto this
      *                     initial transition
-     * @return map<CH> transitions of blocks incident on n (chained onto \p transRef )
+     * @return map<CH, vector<Transition>> transitions of blocks incident on n (chained onto \p transRef )
      */
-    map<CH, Transition> determineTransitionsAroundNode(const VH& n, const CH& bRef, const Transition& transRef) const;
+    map<CH, vector<Transition>>
+    determineTransitionsAroundNode(const VH& n, const CH& bRef, const Transition& transRef, bool onlyfirst = true) const;
 
     /**
      * @brief Fills \p b2trans with the transitions of blocks incident on \p a .
@@ -161,9 +171,10 @@ class MCMeshNavigator : public virtual TetMeshNavigator
      * @param bRef IN: reference block for which the reference transition is \p transRef
      * @param transRef IN: reference transition of block \p bRef , all output transitions will be chained onto this
      *                     initial transition
-     * @return map<CH> transitions of blocks incident on a (chained onto \p transRef )
+     * @return map<CH, vector<Transition>> transitions of blocks incident on a (chained onto \p transRef )
      */
-    map<CH, Transition> determineTransitionsAroundArc(const EH& a, const CH& bRef, const Transition& transRef) const;
+    map<CH, vector<Transition>>
+    determineTransitionsAroundArc(const EH& a, const CH& bRef, const Transition& transRef, bool onlyfirst = true) const;
 
     /**
      * @brief Whether arc has been assigned 0 length in quantization
@@ -250,16 +261,17 @@ class MCMeshNavigator : public virtual TetMeshNavigator
     Vec3Q nodeIGMinBlock(const VH& n, const CH& b) const;
 
     /**
-     * @brief Struct to store info about non-branched sequences of singular arcs
+     * @brief Struct to store info about critical entities
      */
-    struct CriticalLink
+    struct CriticalEntity
     {
         int id;
-        bool cyclic;
-        VH nFrom;
-        VH nTo;
-        vector<HEH> pathHas; // This is empty when representing an isolated critical node
-        int length;
+        int dim;
+        VH nFrom;                 // Empty if critical patch
+        VH nTo;                   // Equal to nFrom for critical node or cyclic critical link
+        vector<HEH> pathHas;      // Empty for critical node or critical patch
+        set<FH> regionPs;         // Empty for critical node or critical link
+        set<EH> regionBoundaryAs; // Empty for critical node or critical link
     };
 
     /**
@@ -276,18 +288,31 @@ class MCMeshNavigator : public virtual TetMeshNavigator
     /**
      * @brief Gather all critical links in the MC.
      *
-     * @param criticalLinks OUT: collection of all critical links
+     * @param isCriticalNode OUT: markings of critical nodes
+     * @param isCriticalArc OUT: markings of critical arcs
+     * @param isCriticalPatch OUT: markings of critical patches
+     * @param criticalEntities OUT: collection of all critical entities
      * @param a2criticalLinkIdx OUT: mapping of each critical arc to its containing critical link idx
+     * @param p2criticalRegionIdx OUT: mapping of each critical patch to its containing region idx
      * @param n2criticalLinksOut OUT: mapping of each critical node to its outgoing critical links idx (paths are
      * directed!)
      * @param n2criticalLinksIn OUT: mapping of each critical node to its incoming critical links idx (paths are
      * directed!)
+     * @param includeFeatures IN: whether to include features in critical entities
+     * @param includeSingularities IN: whether to include singularities in critical entities
+     * @param forceBoundaries IN: whether to force-include boundaries and boundary singularities in critical entities
      */
-    void getCriticalLinks(vector<CriticalLink>& criticalLinks,
-                          map<EH, int>& a2criticalLinkIdx,
-                          map<VH, vector<int>>& n2criticalLinksOut,
-                          map<VH, vector<int>>& n2criticalLinksIn,
-                          bool includeFeatures = false) const;
+    void getCriticalEntities(vector<bool>& isCriticalNode,
+                             vector<bool>& isCriticalArc,
+                             vector<bool>& isCriticalPatch,
+                             vector<CriticalEntity>& criticalEntities,
+                             map<EH, int>& a2criticalLinkIdx,
+                             map<FH, int>& p2criticalRegionIdx,
+                             map<VH, vector<int>>& n2criticalLinksOut,
+                             map<VH, vector<int>>& n2criticalLinksIn,
+                             bool includeFeatures = true,
+                             bool includeSingularities = true,
+                             bool forceBoundaries = true) const;
 
     /**
      * @brief Gather all boundary regions in the MC.
@@ -331,9 +356,44 @@ class MCMeshNavigator : public virtual TetMeshNavigator
     void assertManifoldBlock(const CH& b) const;
 
     /**
-     * @brief Properties of the MC meta mesh
+     * @brief Minimalist visualization of patches as colored facets, arcs as colored polylines (cylinders)
+     *        and nodes as colored spheres.
+     */
+    void debugViewMC() const;
+
+    /**
+     * @brief Minimalist visualization of patches as colored facets, arcs as colored polylines (cylinders)
+     *        and nodes as colored spheres. Limited to neighborhood of \p n.
+     */
+    void debugViewMC(const VH& n) const;
+
+    /**
+     * @brief Minimalist visualization of patches as colored facets, arcs as colored polylines (cylinders)
+     *        and nodes as colored spheres. Limited to neighborhood of \p b.
+     */
+    void debugViewMC(const CH& b) const;
+
+    /**
+     * @brief Minimalist visualization of patches as colored facets, arcs as colored polylines (cylinders)
+     *        and nodes as colored spheres. Limited to neighborhood of \p p.
+     */
+    void debugViewMC(const FH& p) const;
+
+    /**
+     * @brief Minimalist visualization of patches as colored facets, arcs as colored polylines (cylinders)
+     *        and nodes as colored spheres. Limited to neighborhood of \p a.
+     */
+    void debugViewMC(const EH& a) const;
+
+    /**
+     * @brief Minimalist visualization of \p b in parameter space. Only shows \p b without neighbors.
+     */
+    void debugViewIGM(const CH& b) const;
+
+    /**
+     * @brief Get the property wrapper for the managed MC Mesh
      *
-     * @return const MCMeshProps& the MC meta mesh properties
+     * @return const MCMeshProps& property wrapper
      */
     const MCMeshProps& mcMeshProps() const
     {
@@ -345,19 +405,34 @@ class MCMeshNavigator : public virtual TetMeshNavigator
      * @brief Trace a critical link to both its endpoints
      *
      * @param haStart IN: first halfarc to expand from
-     * @param nsStop IN/OUT: endpoint vertices (dont expand further). Circular Paths will add new nsStop
-     * @param criticalLinks IN/OUT: new path is added here
-     * @param a2criticalLinkIdx IN/OUT: mappings are updated for the new path
-     * @param n2criticalLinksOut IN/OUT: mappings are updated for the new path
-     * @param n2criticalLinksIn IN/OUT: mappings are updated for the new path
+     * @param nsStop IN/OUT: endpoint vertices (dont expand further). Circular links will add new nsStop
+     * @param criticalEntities IN/OUT: new link is added here
+     * @param a2criticalLinkIdx IN/OUT: mappings are updated for the new link
+     * @param n2criticalLinksOut IN/OUT: mappings are updated for the new link
+     * @param n2criticalLinksIn IN/OUT: mappings are updated for the new link
      */
     void traceCriticalLink(const HEH& haStart,
                            const vector<bool>& arcIsCritical,
                            set<VH>& nsStop,
-                           vector<CriticalLink>& criticalLinks,
+                           vector<CriticalEntity>& criticalEntities,
                            map<EH, int>& a2criticalLinkIdx,
                            map<VH, vector<int>>& n2criticalLinksOut,
                            map<VH, vector<int>>& n2criticalLinksIn) const;
+
+    /**
+     * @brief Trace a critical region to its boundary
+     *
+     * @param pStart IN: first patch to expand from
+     * @param isCriticalArc IN: markings of critical arcs
+     * @param isCriticalPatch IN: markings of critical patches
+     * @param criticalEntities IN/OUT: new region is added here
+     * @param p2criticalRegionIdx IN/OUT: mappings are updated for the new region
+     */
+    void traceCriticalRegion(const FH& pStart,
+                             const vector<bool>& isCriticalArc,
+                             const vector<bool>& isCriticalPatch,
+                             vector<CriticalEntity>& criticalEntities,
+                             map<FH, int>& p2criticalRegionIdx) const;
 
   private:
     const MCMeshProps& _mcMeshPropsC;

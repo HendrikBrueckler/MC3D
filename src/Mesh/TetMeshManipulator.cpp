@@ -1028,7 +1028,7 @@ bool TetMeshManipulator::makeBlockTransitionFree(vector<bool>& tetVisited, const
                                      FH f = meshProps().mesh().face_handle(hf1to2);
                                      HFH hf2to1 = meshProps().mesh().opposite_halfface_handle(hf1to2);
                                      CH tet2 = meshProps().mesh().incident_cell(hf2to1);
-                                     if (tet2.is_valid() && !meshProps().get<IS_WALL>(f))
+                                     if (tet2.is_valid() && !meshProps().isBlockBoundary(f))
                                      {
                                          innerFaces.insert(f);
                                          if (tetVisited[tet2.idx()])

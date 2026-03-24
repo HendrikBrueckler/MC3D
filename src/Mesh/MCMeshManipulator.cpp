@@ -267,8 +267,7 @@ EH MCMeshManipulator::mergeArcs(const EH& a1, const EH& a2, const VH& n, set<FH>
     mcMeshProps().cloneAll(a1, a);
     mcMeshProps().cloneAll(has1[0], flipArcDir1 ? hasChild[1] : hasChild[0]);
     mcMeshProps().cloneAll(has1[1], flipArcDir1 ? hasChild[0] : hasChild[1]);
-    mcMeshProps().set<IS_SINGULAR>(
-        a, mcMeshProps().get<IS_SINGULAR>(a1) || mcMeshProps().get<IS_SINGULAR>(a2));
+    mcMeshProps().set<IS_SINGULAR>(a, mcMeshProps().get<IS_SINGULAR>(a1) || mcMeshProps().get<IS_SINGULAR>(a2));
     if (mcMeshProps().isAllocated<ARC_INT_LENGTH>())
     {
         mcMeshProps().set<ARC_INT_LENGTH>(
@@ -863,7 +862,7 @@ vector<CH> MCMeshManipulator::splitBlockTopologically(const CH& b, const FH& p)
                     continue;
                 }
 
-                HFH hpAdj = mcMeshProps().mesh().adjacent_halfface_in_cell(hp, ha);
+                HFH hpAdj = safeAdjacentHalffaceInBlock(hp, ha);
                 if (hpAdj.is_valid())
                 {
                     if (!hpVisited[hpAdj.idx()])
@@ -1167,53 +1166,114 @@ void MCMeshManipulator::updateSplitBlockReferences(const CH& b, const vector<CH>
             as[i].insert(arc);
         for (FH patch : mcMesh.cell_faces(bsChild[i]))
             ps[i].insert(patch);
+    }
 
-        // BLOCK_CORNER_NODES: split plane dir herausfinden
-        for (auto& kv : mcMeshProps().ref<BLOCK_CORNER_NODES>(b))
+    UVWDir splitPlaneAlternative = UVWDir::ANY;
+    for (EH a2 : mcMesh.face_edges(p))
+    {
+        for (auto& kv : mcMeshProps().ref<BLOCK_EDGE_ARCS>(b))
+            for (EH a : kv.second)
+                if (a == a2)
+                    LOG(WARNING) << "BLOCK_EDGE_ARC as part of splitting plane, beware of possible errors";
+        for (auto& kv : mcMeshProps().ref<BLOCK_FACE_ARCS>(b))
+            for (EH a : kv.second)
+                if (a == a2)
+                    splitPlaneAlternative = splitPlaneAlternative & ~(kv.first | -kv.first);
+    }
+    for (VH n2 : mcMesh.face_vertices(p))
+    {
+        for (auto& kv : mcMeshProps().ref<BLOCK_EDGE_NODES>(b))
+            for (VH n : kv.second)
+                if (n == n2)
+                    splitPlaneAlternative = splitPlaneAlternative & ~(kv.first | -kv.first);
+        for (auto& kv : mcMeshProps().ref<BLOCK_FACE_NODES>(b))
+            for (VH n : kv.second)
+                if (n == n2)
+                    splitPlaneAlternative = splitPlaneAlternative & ~(kv.first | -kv.first);
+    }
+    if (dim(splitPlaneAlternative) == 1)
+    {
+        for (int i = 0; i < 2; i++)
         {
-            auto& dir = kv.first;
-            auto& corner = kv.second;
-            if (ns[i].find(corner) == ns[i].end())
+            // Now find outgoing halfarc from any node of inserted patch (that is not within patch) and is in dir
+            // splitPlaneAlternative
+            for (VH n : mcMesh.face_vertices(p))
             {
-                if (decompose(splitPlane[i], DIM_1_DIRS).size() != 1)
-                    splitPlane[i] = dir & splitPlane[i];
-            }
-            else
-            {
-                if (decompose(splitPlane[i], DIM_1_DIRS).size() != 1)
-                    splitPlane[i] = -dir & splitPlane[i];
+                bool found = false;
+                for (HEH ha : mcMesh.outgoing_halfedges(n))
+                {
+                    // Necessary to iterate like this, because selfadjacency messes with edgecelliter
+                    set<CH> bs;
+                    for (FH p2 : mcMesh.edge_faces(mcMesh.edge_handle(ha)))
+                        for (CH b2 : mcMesh.face_cells(p2))
+                            if (b2.is_valid())
+                                bs.insert(b2);
+                    if (!contains(mcMesh.face_halfedges(p), ha) && contains(bs, bsChild[i])
+                        && (halfarcDirInBlock(ha, b) & splitPlaneAlternative) != UVWDir::NONE)
+                    {
+                        splitPlane[i] = -halfarcDirInBlock(ha, b);
+                        splitPlane[i == 1 ? 0 : 1] = halfarcDirInBlock(ha, b);
+                        found = true;
+                        break;
+                    }
+                }
+                if (found)
+                    break;
             }
         }
-        // BLOCK_EDGE_NODES: split plane dir herausfinden
-        if (dim(splitPlane[i]) > 1)
-            for (const auto& kv : mcMeshProps().ref<BLOCK_EDGE_NODES>(b))
-                for (VH n : kv.second)
-                    if (pns.find(n) != pns.end())
-                        if (dim(splitPlane[i]) > 1)
-                            splitPlane[i] = splitPlane[i] & ~(kv.first | -kv.first);
-        // BLOCK_FACE_NODES: split plane dir herausfinden
-        if (dim(splitPlane[i]) > 1)
-            for (const auto& kv : mcMeshProps().ref<BLOCK_FACE_NODES>(b))
-                for (VH n : kv.second)
-                    if (pns.find(n) != pns.end())
-                        if (dim(splitPlane[i]) > 1)
-                            splitPlane[i] = splitPlane[i] & ~(kv.first | -kv.first);
     }
-    if (decompose(splitPlane[0], DIM_1_DIRS).size() != 1 && decompose(splitPlane[1], DIM_1_DIRS).size() != 1)
+    else
     {
-        for (auto a : mcMesh.face_edges(p))
+        for (int i = 0; i < 2; i++)
         {
-            auto dir = ~halfarcDirInBlock(mcMesh.halfedge_handle(a, 0), b);
-            dir = dir | -dir;
-            splitPlane[0] = splitPlane[0] & ~dir;
+
+            // BLOCK_CORNER_NODES: split plane dir herausfinden
+            for (auto& kv : mcMeshProps().ref<BLOCK_CORNER_NODES>(b))
+            {
+                auto& dir = kv.first;
+                auto& corner = kv.second;
+                if (ns[i].find(corner) == ns[i].end())
+                {
+                    if (decompose(splitPlane[i], DIM_1_DIRS).size() != 1)
+                        splitPlane[i] = dir & splitPlane[i];
+                }
+                else
+                {
+                    if (decompose(splitPlane[i], DIM_1_DIRS).size() != 1)
+                        splitPlane[i] = -dir & splitPlane[i];
+                }
+            }
+            // BLOCK_EDGE_NODES: split plane dir herausfinden
+            if (dim(splitPlane[i]) > 1)
+                for (const auto& kv : mcMeshProps().ref<BLOCK_EDGE_NODES>(b))
+                    for (VH n : kv.second)
+                        if (pns.find(n) != pns.end())
+                            if (dim(splitPlane[i]) > 1)
+                                splitPlane[i] = splitPlane[i] & ~(kv.first | -kv.first);
+            // BLOCK_FACE_NODES: split plane dir herausfinden
+            if (dim(splitPlane[i]) > 1)
+                for (const auto& kv : mcMeshProps().ref<BLOCK_FACE_NODES>(b))
+                    for (VH n : kv.second)
+                        if (pns.find(n) != pns.end())
+                            if (dim(splitPlane[i]) > 1)
+                                splitPlane[i] = splitPlane[i] & ~(kv.first | -kv.first);
         }
         if (decompose(splitPlane[0], DIM_1_DIRS).size() != 1 && decompose(splitPlane[1], DIM_1_DIRS).size() != 1)
-            splitPlane[0] = decompose(splitPlane[0], DIM_1_DIRS)[0];
+        {
+            for (auto a : mcMesh.face_edges(p))
+            {
+                auto dir = ~halfarcDirInBlock(mcMesh.halfedge_handle(a, 0), b);
+                dir = dir | -dir;
+                splitPlane[0] = splitPlane[0] & ~dir;
+            }
+            if (decompose(splitPlane[0], DIM_1_DIRS).size() != 1 && decompose(splitPlane[1], DIM_1_DIRS).size() != 1)
+                splitPlane[0] = decompose(splitPlane[0], DIM_1_DIRS)[0];
+        }
+        if (decompose(splitPlane[0], DIM_1_DIRS).size() == 1)
+            splitPlane[1] = -splitPlane[0];
+        else if (decompose(splitPlane[0], DIM_1_DIRS).size() == 1)
+            splitPlane[0] = -splitPlane[1];
     }
-    if (decompose(splitPlane[0], DIM_1_DIRS).size() == 1)
-        splitPlane[1] = -splitPlane[0];
-    else if (decompose(splitPlane[0], DIM_1_DIRS).size() == 1)
-        splitPlane[0] = -splitPlane[1];
 
     // BLOCK_CORNER_NODES
     for (const auto& kv : mcMeshProps().ref<BLOCK_CORNER_NODES>(b))
@@ -1484,7 +1544,8 @@ vector<UVWDir> MCMeshManipulator::getInsertedArcDirs(const FH& p, const EH& a) c
             auto dirs2has = halfpatchHalfarcsByDir(hp);
             UVWDir fromSideDir
                 = findMatching(dirs2has,
-                               [&](const pair<const UVWDir, vector<HEH>>& dir2has) {
+                               [&](const pair<const UVWDir, vector<HEH>>& dir2has)
+                               {
                                    return containsMatching(dir2has.second,
                                                            [&](const HEH& ha)
                                                            { return mcMesh.from_vertex_handle(ha) == nFrom; });

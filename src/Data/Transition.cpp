@@ -14,6 +14,16 @@ bool Transition::operator==(const Transition& tr) const
     return tr.rotation == rotation && tr.translation == translation;
 }
 
+bool Transition::operator!=(const Transition& tr) const
+{
+    return !(*(this) == tr);
+}
+
+bool Transition::operator<(const Transition& tr) const
+{
+    return rotation < tr.rotation || (rotation == tr.rotation && translation < tr.translation);
+}
+
 bool Transition::isIdentity() const
 {
     return rotationIsIdentity() && translation == Vec3Q{0, 0, 0};

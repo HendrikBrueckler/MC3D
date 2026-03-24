@@ -22,7 +22,7 @@ MC3D_PROPERTY(PATCH_TRANSITION,     Face,     Transition);
 MC3D_PROPERTY(PATCH_IGM_TRANSITION, Face,     Transition);
 MC3D_PROPERTY(PATCH_MIN_DIST,       Face,     float);
 MC3D_PROPERTY(PATCH_MESH_HALFFACES, Face,     set<HFH>);
-MC3D_PROPERTY(IS_SINGULAR,          Edge,     bool);
+MC3D_PROPERTY(IS_SINGULAR,          Edge,     int);
 MC3D_PROPERTY(ARC_MESH_HALFEDGES,   Edge,     list<HEH>);
 MC3D_PROPERTY(ARC_INT_LENGTH,       Edge,     int);
 MC3D_PROPERTY(ARC_DBL_LENGTH,       Edge,     double);
@@ -31,6 +31,9 @@ MC3D_PROPERTY(BLOCK_COLLAPSE_DIR,   Cell,     UVWDir);
 MC3D_PROPERTY(IS_FEATURE_V,         Vertex,   int);
 MC3D_PROPERTY(IS_FEATURE_E,         Edge,     int);
 MC3D_PROPERTY(IS_FEATURE_F,         Face,     int);
+MC3D_PROPERTY(IS_CRITICAL_N,        Vertex,   bool);
+MC3D_PROPERTY(IS_CRITICAL_A,        Edge,     bool);
+MC3D_PROPERTY(IS_CRITICAL_P,        Face,     bool);
 MC3D_PROPERTY(MARK_N,               Vertex,   int);
 MC3D_PROPERTY(MARK_A,               Edge,     int);
 MC3D_PROPERTY(MARK_P,               Face,     int);
@@ -72,6 +75,9 @@ using MCMeshPropsBase = MeshPropsInterface<MCMesh,
                                            IS_FEATURE_E,
                                            IS_FEATURE_V,
                                            IS_FEATURE_F,
+                                           IS_CRITICAL_N,
+                                           IS_CRITICAL_A,
+                                           IS_CRITICAL_P,
                                            MARK_N,
                                            MARK_P,
                                            MARK_A,

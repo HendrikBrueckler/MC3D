@@ -14,6 +14,14 @@ if (NOT TARGET TS3D::TS3D)
 endif()
 list(APPEND MC3D_LIB_LIST TS3D::TS3D)
 
+if (MC3D_WITH_VIEWER)
+    if (NOT TARGET volumeshOS)
+        add_subdirectory(${PROJECT_SOURCE_DIR}/extern/volumeshos extern/volumeshos EXCLUDE_FROM_ALL)
+    endif()
+    list(APPEND MC3D_LIB_LIST volumeshOS)
+    list(APPEND MC3D_COMPILE_DEFINITIONS "MC3D_WITH_VIEWER")
+endif()
+
 # gmp
 find_package(GMP REQUIRED)
 find_package(GMPXX REQUIRED)
@@ -106,6 +114,7 @@ list(APPEND MC3D_COMPILE_OPTIONS_PRV "-Wall" "-Wextra" "-Wshadow" "-Wunused" "-W
 target_compile_options(MC3D PRIVATE ${MC3D_COMPILE_OPTIONS_PRV})
 # preprocessor defines
 target_compile_definitions(MC3D PRIVATE ${MC3D_COMPILE_DEFINITIONS_PRV})
+target_compile_definitions(MC3D PUBLIC ${MC3D_COMPILE_DEFINITIONS})
 
 ### Install and export
 install(DIRECTORY "${PROJECT_SOURCE_DIR}/include/MC3D"

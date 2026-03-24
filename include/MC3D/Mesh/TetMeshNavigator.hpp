@@ -488,6 +488,66 @@ class TetMeshNavigator
     determineTransitionsAroundEdge(const EH& e, const CH& tetRef, const Transition& transRef = Transition()) const;
 
     /**
+     * @brief Helper function that pulls back integer-grid lines and singularities from parameter space
+     *        into object space. Returned grid lines are separated by their parametric direction (0, 1, 2),
+     *        and by whether they are boundary singularities (3, 6), or interior singularities (2, 6) with
+     *        positive/negative index respectively. Also, returned grid lines span exactly one tetrahedron,
+     *        not further; continuity is purely geometric.
+     *
+     * @tparam CHART_T Choose between standard CHART or CHART_IGM
+     * @param scaling IN: scale parametrization by this factor before grid extraction
+     * @return array<vector<pair<pairTT<Vec3d>, CH>>, 7> all edges of the grid, separated by contained tet
+     */
+    template <typename CHART_T>
+    array<vector<pair<pairTT<Vec3d>, CH>>, 7> getParametricGridEdges(double scaling = 1.0) const;
+
+    /**
+     * @brief Visualize the parametrization of the given tet mesh, by overlaying the pulled-back parametric
+     *        integer-grid and singularities on top of the transparent tet mesh domain.
+     *
+     * @tparam CHART_T Choose between standard CHART or CHART_IGM
+     * @param scaling IN: scale parametrization by this factor before grid extraction
+     */
+    template <typename CHART_T>
+    void visualizeParametrization(double scaling = 1.0) const;
+
+    /**
+     * @brief Visualize the geometry of the given tet mesh in parameter space; may commonly exhibit
+     *        self-overlaps.
+     *
+     * @tparam CHART_T Choose between standard CHART or CHART_IGM
+     * @param scaling IN: scale parametrization by this factor before visualization
+     */
+    template <typename CHART_T>
+    void visualizeParameterSpace(double scaling = 1.0) const;
+
+    /**
+     * @brief Quick-and-dirty debug visualization: assign halffaces, edges and vertices to any of
+     *        three sets. The visualization of each of these sets can be fine-tuned in the UI.
+     *
+     * @param markFacesRed IN: halffaces in the first set
+     * @param markFacesGreen IN: halffaces in the second set
+     * @param markFacesBlue IN: halffaces in the third set
+     * @param markFacesTransparent IN: halffaces in NO set (contains remaining halffacet by default)
+     * @param markEdgesRed IN: edges in the first set
+     * @param markEdgesGreen IN: edges in the second set
+     * @param markEdgesBlue IN: edges in the third set
+     * @param markVerticesRed IN: vertices in the first set
+     * @param markVerticesGreen IN: vertices in the second set
+     * @param markVerticesBlue IN: vertices in the third set
+     */
+    void debugView(const set<HFH>& markFacesRed,
+                   const set<HFH>& markFacesGreen = {},
+                   const set<HFH>& markFacesBlue = {},
+                   const set<HFH>& markFacesTransparent = {},
+                   const set<EH>& markEdgesRed = {},
+                   const set<EH>& markEdgesGreen = {},
+                   const set<EH>& markEdgesBlue = {},
+                   const set<VH>& markVerticesRed = {},
+                   const set<VH>& markVerticesGreen = {},
+                   const set<VH>& markVerticesBlue = {}) const;
+
+    /**
      * @brief Get the mesh properties
      *
      * @return const TetMeshProps&

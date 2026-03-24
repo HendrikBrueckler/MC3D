@@ -37,6 +37,7 @@ option(MC3D_ENABLE_LOGGING    "Enable logging for MC3D" ${MC3D_STANDALONE})
 option(MC3D_BUILD_CLI         "Build CLI app for MC3D"  ${MC3D_STANDALONE})
 option(MC3D_BUILD_TESTS       "Build tests for MC3D"    ${MC3D_STANDALONE})
 option(MC3D_SUBMODULES_MANUAL "Skip automatic submodule download" OFF)
+option(MC3D_WITH_VIEWER       "Integrate viewer for volumeMeshes" OFF)
 option(BUILD_SHARED_LIBS      "Build libraries as shared as opposed to static" ON)
 
 ### Global cmake settings
@@ -64,6 +65,9 @@ add_subdirectory(src)
 ### Add CLI
 if (MC3D_BUILD_CLI)
     add_subdirectory(cli)
+    if (MC3D_WITH_VIEWER)
+        add_subdirectory(viewer-demo)
+    endif()
 endif()
 
 ### Tests

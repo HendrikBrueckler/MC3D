@@ -47,24 +47,25 @@ MotorcycleSpawner::RetCode MotorcycleSpawner::spawnFeatureMotorcycles()
 {
     const TetMesh& tetMesh = meshProps().mesh();
 
-    for (FH f : tetMesh.faces())
-    {
-        if (meshProps().get<IS_FEATURE_F>(f) && !tetMesh.is_boundary(f))
-        {
-            // Sanity check
-            UVWDir halffaceNormal = normalDirUVW(tetMesh.halfface_handle(f, 0));
-            if (dim(halffaceNormal) != 1)
-            {
-                LOG(ERROR) << "Face " << f.idx() << " is feature"
-                           << " but is not const in exactly 1 coord out of U,V,W";
-                return INVALID_SINGULARITY;
-            }
-            // Get incident cell
-            CH tet = tetMesh.incident_cell(tetMesh.halfface_handle(f, 0));
-            EH e = *tetMesh.fe_iter(f);
-            spawnMotorcycle(e, tet, toCoord(halffaceNormal));
-        }
-    }
+    // NO NEED, feature faces marked as walls already handled elsewhere
+    // for (FH f : tetMesh.faces())
+    // {
+    //     if (meshProps().get<IS_FEATURE_F>(f) && !tetMesh.is_boundary(f))
+    //     {
+    //         // Sanity check
+    //         UVWDir halffaceNormal = normalDirUVW(tetMesh.halfface_handle(f, 0));
+    //         if (dim(halffaceNormal) != 1)
+    //         {
+    //             LOG(ERROR) << "Face " << f.idx() << " is feature"
+    //                        << " but is not const in exactly 1 coord out of U,V,W";
+    //             return INVALID_SINGULARITY;
+    //         }
+    //         // Get incident cell
+    //         CH tet = tetMesh.incident_cell(tetMesh.halfface_handle(f, 0));
+    //         EH e = *tetMesh.fe_iter(f);
+    //         spawnMotorcycle(e, tet, toCoord(halffaceNormal));
+    //     }
+    // }
 
     for (EH e : tetMesh.edges())
     {

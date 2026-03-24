@@ -13,7 +13,7 @@ TetMeshProps::TetMeshProps(TetMesh& mesh_, MCMesh& mcMesh_) : TetMeshPropsBase(m
 
 bool TetMeshProps::isBlockBoundary(const FH& f) const
 {
-    return get<IS_WALL>(f) || mesh().is_boundary(f);
+    return (isAllocated<IS_WALL>() && get<IS_WALL>(f)) || mesh().is_boundary(f);
 }
 
 bool TetMeshProps::isBlockBoundary(const HFH& hf) const

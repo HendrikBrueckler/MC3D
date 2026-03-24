@@ -173,16 +173,41 @@ bool MCReducer::isRemovable(const FH& p,
                             bool avoidSelfadjacency,
                             bool preserveFeatures) const
 {
-    if (mcMeshProps().mesh().is_deleted(p))
+    auto& mcMesh = mcMeshProps().mesh();
+
+    if (mcMesh.is_deleted(p))
         return false;
 
-    if (mcMeshProps().mesh().is_boundary(p))
+    if (mcMesh.is_boundary(p))
         return false;
+
+    if (mcMeshProps().isAllocated<IS_CRITICAL_P>() && mcMeshProps().get<IS_CRITICAL_P>(p))
+        return false;
+
+    if (mcMeshProps().isAllocated<IS_CRITICAL_A>())
+    {
+        // Do not remove patches incident on feature arcs
+        for (EH a : mcMesh.face_edges(p))
+            if (mcMeshProps().get<IS_CRITICAL_A>(a))
+                return false;
+    }
+    if (mcMeshProps().isAllocated<IS_CRITICAL_N>())
+    {
+        // Do not remove patches incident on feature arcs
+        for (VH n : mcMesh.face_vertices(p))
+            if (mcMeshProps().get<IS_CRITICAL_N>(n))
+                return false;
+    }
 
     if (preserveSingularPatches)
-        for (EH a : mcMeshProps().mesh().face_edges(p))
+    {
+        for (EH a : mcMesh.face_edges(p))
             if (mcMeshProps().get<IS_SINGULAR>(a))
                 return false;
+        for (VH n : mcMesh.face_vertices(p))
+            if (mcMeshProps().nodeType(n).first == SingularNodeType::SINGULAR)
+                return false;
+    }
 
     if (preserveFeatures)
     {
@@ -191,29 +216,40 @@ bool MCReducer::isRemovable(const FH& p,
             return false;
         // Do not remove patches incident on feature arcs
         if (mcMeshProps().isAllocated<IS_FEATURE_E>())
-            for (EH a : mcMeshProps().mesh().face_edges(p))
+            for (EH a : mcMesh.face_edges(p))
                 if (mcMeshProps().get<IS_FEATURE_E>(a))
                     return false;
 
         // Do not remove patches incident on feature nodes
         if (mcMeshProps().isAllocated<IS_FEATURE_V>())
-            for (VH n : mcMeshProps().mesh().face_vertices(p))
-                if (mcMeshProps().get<IS_FEATURE_V>(n))
+            for (VH n : mcMesh.face_vertices(p))
+                if (mcMeshProps().get<IS_FEATURE_V>(n)
+                    || mcMeshProps().nodeType(n).second == FeatureNodeType::SEMI_FEATURE_SINGULAR_BRANCH)
                     return false;
     }
 
     // Must not merge a selfadjacent block into a torus
-    auto cells = mcMeshProps().mesh().face_cells(p);
+    auto cells = mcMesh.face_cells(p);
     if (cells[0] == cells[1])
         return false;
 
     if (avoidSelfadjacency)
     {
         // Must not merge two blocks adjacent via more than one side into a selfadjacent block
-        auto hps = mcMeshProps().mesh().face_halffaces(p);
-        for (HFH hp : mcMeshProps().mesh().cell_halffaces(cells[0]))
+        auto hps = mcMesh.face_halffaces(p);
+        for (HFH hp : mcMesh.cell_halffaces(cells[0]))
             if (hp != hps[0]
-                && mcMeshProps().mesh().incident_cell(mcMeshProps().mesh().opposite_halfface_handle(hp)) == cells[1])
+                && mcMesh.incident_cell(mcMesh.opposite_halfface_handle(hp)) == cells[1])
+                return false;
+
+        // Must not merge two blocks that would create arc-selfadjacency
+        for (EH a: mcMesh.cell_edges(cells[0]))
+            if (!contains(mcMesh.face_edges(p), a) && contains(mcMesh.edge_cells(a), cells[1]))
+                return false;
+
+        // Must not merge two blocks that would create node-selfadjacency
+        for (VH n : mcMesh.cell_vertices(cells[0]))
+            if (!contains(mcMesh.face_vertices(p), n) && contains(mcMesh.vertex_cells(n), cells[1]))
                 return false;
     }
 
@@ -237,6 +273,9 @@ bool MCReducer::isRemovable(const EH& a) const
         return false;
 
     if (mcMeshProps().isAllocated<IS_FEATURE_E>() && mcMeshProps().get<IS_FEATURE_E>(a))
+        return false;
+
+    if (mcMeshProps().isAllocated<IS_CRITICAL_A>() && mcMeshProps().get<IS_CRITICAL_A>(a))
         return false;
 
     HEH ha = mesh.halfedge_handle(a, 0);
@@ -277,6 +316,9 @@ bool MCReducer::isRemovable(const VH& n) const
         return false;
 
     if (mcMeshProps().isAllocated<IS_FEATURE_V>() && mcMeshProps().get<IS_FEATURE_V>(n))
+        return false;
+        
+    if (mcMeshProps().isAllocated<IS_CRITICAL_N>() && mcMeshProps().get<IS_CRITICAL_N>(n))
         return false;
 
     // Node removable iff 2 different halfarcs incident to it

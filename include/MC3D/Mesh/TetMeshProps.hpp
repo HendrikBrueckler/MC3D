@@ -32,6 +32,7 @@ MC3D_PROPERTY(TOUCHED,         Vertex, bool);
 MC3D_PROPERTY(COLOR_F,         Face, Vec4f);
 MC3D_PROPERTY(COLOR_E,         Edge, Vec4f);
 MC3D_PROPERTY(COLOR_V,         Vertex, Vec4f);
+MC3D_PROPERTY(ALGO_VARIANT,    Mesh, int);
 
 // Sparse -> should be mapped
 MC3D_MAP_PROPERTY(WALL_DIST,       Face, float);
@@ -75,7 +76,8 @@ using TetMeshPropsBase = MeshPropsInterface<TetMesh,
                                             TOUCHED,
                                             COLOR_F,
                                             COLOR_E,
-                                            COLOR_V>;
+                                            COLOR_V,
+                                            ALGO_VARIANT>;
 
 /**
  * @brief Class/struct to manage predefined properties of a raw tet mesh

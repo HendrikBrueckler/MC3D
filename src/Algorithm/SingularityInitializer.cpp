@@ -31,7 +31,7 @@ SingularityInitializer::RetCode SingularityInitializer::initTransitions()
 SingularityInitializer::RetCode SingularityInitializer::initSingularities()
 {
     const TetMesh& tetMesh = meshProps().mesh();
-    auto isSingular = meshProps().allocate<IS_SINGULAR>();
+    auto isSingular = meshProps().allocate<IS_SINGULAR>(0);
 
     size_t singularities = 0;
     for (EH e : tetMesh.edges())
@@ -40,11 +40,11 @@ SingularityInitializer::RetCode SingularityInitializer::initSingularities()
 
         if (tetMesh.is_boundary(e))
         {
-            int nTimes90deg = std::round(totalDihedralAngleUVW(e) / M_PI_2);
+            int nTimesPi = std::round(totalDihedralAngleUVW(e) / M_PI_2);
             // Check if total interior dihedral angle in UVW is >= 270°
-            if (nTimes90deg == 3 || nTimes90deg == 1)
+            if (nTimesPi != 2)
             {
-                isSingular[e] = true; // surface singularity
+                isSingular[e] = nTimesPi - 2; // surface singularity
                 singularities++;
             }
         }
@@ -65,7 +65,13 @@ SingularityInitializer::RetCode SingularityInitializer::initSingularities()
             cyclicTransition.translation = Vec3Q(0, 0, 0);
             if (!cyclicTransition.isIdentity())
             {
-                isSingular[e] = true; // volume singularity
+                int nTimesPi = std::round(totalDihedralAngleUVW(e) / M_PI_2);
+                if (nTimesPi == 0)
+                {
+                    LOG(WARNING) << "Numerical issue in transitions/dihedral parametric angles";
+                    nTimesPi = 1;
+                }
+                isSingular[e] = nTimesPi - 4; // volume singularity
                 singularities++;
             }
         }
@@ -181,7 +187,33 @@ SingularityInitializer::RetCode SingularityInitializer::makeFeaturesConsistent()
             if (meshProps().get<IS_FEATURE_E>(e))
                 dirs = dirs | tet2trans.at(*tetMesh.ec_iter(e)).invert().rotate(edgeDirection(e, *tetMesh.ec_iter(e)));
         if (dim(dirs) > 1)
+        {
             meshProps().set<IS_FEATURE_V>(v, INT_MAX);
+            continue;
+        }
+
+        if (dim(dirs) == 1)
+        {
+            UVWDir normals = UVWDir::NONE;
+
+            for (FH f : tetMesh.vertex_faces(v))
+            {
+                HFH hf = tetMesh.halfface_handle(f, 0);
+                if (tetMesh.is_boundary(hf))
+                    hf = tetMesh.opposite_halfface_handle(hf);
+
+                if (meshProps().get<IS_FEATURE_F>(f))
+                {
+                    UVWDir normal = normalDirUVW(hf);
+                    normals = normals | tet2trans.at(tetMesh.incident_cell(hf)).invert().rotate(normal);
+                }
+            }
+            if (dim(dirs | normals) == 1)
+            {
+                meshProps().set<IS_FEATURE_V>(v, INT_MAX);
+                continue;
+            }
+        }
     }
 
     return SUCCESS;

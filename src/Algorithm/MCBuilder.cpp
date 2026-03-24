@@ -117,6 +117,8 @@ MCBuilder::RetCode MCBuilder::connectMCMesh(bool forbidTori, bool forbidSelfadja
         return ret;
     }
 
+    markCriticalEntities();
+
     meshProps().release<MC_BLOCK_ID>();
     meshProps().release<MC_BLOCK_DATA>();
 
@@ -157,6 +159,8 @@ MCBuilder::RetCode MCBuilder::gatherBlockData(const CH& tetStart, vector<bool>& 
                     return true;
                 }
                 CH tetOpp = tetMesh.incident_cell(tetMesh.opposite_halfface_handle(hf));
+
+                // Face-selfadjacency check
                 if (tetOpp.is_valid() && tetVisited[tetOpp.idx()]
                     && meshProps().get<MC_BLOCK_ID>(tetOpp) == blockData.id)
                 {
@@ -189,6 +193,24 @@ MCBuilder::RetCode MCBuilder::gatherBlockData(const CH& tetStart, vector<bool>& 
                             invalidWalls = true;
                             return true;
                         }
+
+                        // Arc selfadjacency check
+                        forEachHfInHeCycle(he,
+                                           hf,
+                                           tetMesh.opposite_halfface_handle(hfAdj),
+                                           [&, this](const HFH& hf2)
+                                           {
+                                               CH tet2 = tetMesh.incident_cell(tetMesh.opposite_halfface_handle(hf2));
+                                               if (tet2.is_valid() && tetVisited[tet2.idx()]
+                                                   && meshProps().get<MC_BLOCK_ID>(tet2) == blockData.id)
+                                               {
+                                                   blockData.selfadjacent = true;
+                                                   blockData.axis = normalHf1;
+                                                   return true;
+                                               }
+                                               return false;
+                                           });
+
                         blockData.edges[dir2].insert(e);
                         meshProps().set<IS_ARC>(e, true);
 
@@ -198,10 +220,12 @@ MCBuilder::RetCode MCBuilder::gatherBlockData(const CH& tetStart, vector<bool>& 
                             if (visitedTetCorners.find({tet, v}) != visitedTetCorners.end())
                                 continue;
 
+                            set<CH> cornerTets;
                             forVertexNeighbourTetsInBlock(v,
                                                           tet,
-                                                          [&visitedTetCorners, &v](const CH tetNeighbor)
+                                                          [&cornerTets, &visitedTetCorners, &v](const CH tetNeighbor)
                                                           {
+                                                              cornerTets.insert(tetNeighbor);
                                                               visitedTetCorners.insert({tetNeighbor, v});
                                                               return false;
                                                           });
@@ -224,6 +248,18 @@ MCBuilder::RetCode MCBuilder::gatherBlockData(const CH& tetStart, vector<bool>& 
                                                                    }
                                                                    return false;
                                                                });
+
+                            // Node selfadjacency check
+                            if (containsMatching(tetMesh.vertex_cells(v),
+                                                 [&, this](const CH& tet2)
+                                                 {
+                                                     return !cornerTets.count(tet2) && tetVisited[tet2.idx()]
+                                                            && meshProps().get<MC_BLOCK_ID>(tet2) == blockData.id;
+                                                 }))
+                            {
+                                blockData.selfadjacent = true;
+                                blockData.axis = normalHf1;
+                            }
 
                             if (hfNormal3 != UVWDir::NONE)
                             {
@@ -359,11 +395,12 @@ MCBuilder::RetCode MCBuilder::createAndMapArcs()
 
     meshProps().allocate<MC_ARC>(EH(-1));
     mcMeshProps.allocate<ARC_MESH_HALFEDGES>(list<HEH>());
-    mcMeshProps.allocate<IS_SINGULAR>(false);
+    mcMeshProps.allocate<IS_SINGULAR>(0);
     if (meshProps().isAllocated<IS_FEATURE_E>())
-        mcMeshProps.allocate<IS_FEATURE_E>(0);
+    mcMeshProps.allocate<IS_FEATURE_E>(0);
     mcMeshProps.allocate<CHILD_EDGES>();
     mcMeshProps.allocate<CHILD_HALFEDGES>();
+    mcMeshProps.allocate<ARC_DBL_LENGTH>(0.0);
 
     // Connect arc edges to complete chains connecting two nodes
     // and map mutually
@@ -449,6 +486,11 @@ MCBuilder::RetCode MCBuilder::createAndMapArcs()
 
                 for (HEH he : chain)
                     meshProps().set<MC_ARC>(tetMesh.edge_handle(he), a);
+
+                double length = 0.0;
+                for (HEH he : chain)
+                    length += edgeLengthUVW<CHART>(tetMesh.edge_handle(he));
+                mcMeshProps.set<ARC_DBL_LENGTH>(a, length);
             }
         }
     }
@@ -799,8 +841,43 @@ void MCBuilder::mark90degreeBoundaryArcsAsSingular()
                 auto itPair = mcMesh.edge_cells(a);
                 int numBlocks = std::distance(itPair.first, itPair.second);
                 if (numBlocks == 1)
-                    mcMeshProps.set<IS_SINGULAR>(a, true);
+                    mcMeshProps.set<IS_SINGULAR>(a, -1);
             }
+}
+
+void MCBuilder::markCriticalEntities()
+{
+    MCMeshProps& mcMeshProps = *meshProps().get<MC_MESH_PROPS>();
+    MCMesh& mcMesh = mcMeshProps.mesh();
+
+    const bool INCLUDE_SINGULARITIES = !meshProps().isAllocated<ALGO_VARIANT>() || (meshProps().get<ALGO_VARIANT>() % 2);
+
+    vector<bool> isCriticalNode, isCriticalArc, isCriticalPatch;
+    vector<MCMeshNavigator::CriticalEntity> criticalEntities;
+    map<EH, int> a2criticalLinkIdx;
+    map<FH, int> p2criticalRegionIdx;
+    map<VH, vector<int>> n2criticalLinksOut;
+    map<VH, vector<int>> n2criticalLinksIn;
+    MCMeshNavigator(meshProps()).getCriticalEntities(isCriticalNode,
+                                                    isCriticalArc,
+                                                    isCriticalPatch,
+                                                    criticalEntities,
+                                                    a2criticalLinkIdx,
+                                                    p2criticalRegionIdx,
+                                                    n2criticalLinksOut,
+                                                    n2criticalLinksIn,
+                                                    true,
+                                                    INCLUDE_SINGULARITIES,
+                                                    true);
+    mcMeshProps.allocate<IS_CRITICAL_N>(false);
+    mcMeshProps.allocate<IS_CRITICAL_A>(false);
+    mcMeshProps.allocate<IS_CRITICAL_P>(false);
+    for (VH n : mcMesh.vertices())
+        mcMeshProps.set<IS_CRITICAL_N>(n, isCriticalNode[n.idx()]);
+    for (EH a : mcMesh.edges())
+        mcMeshProps.set<IS_CRITICAL_A>(a, isCriticalArc[a.idx()]);
+    for (FH p : mcMesh.faces())
+        mcMeshProps.set<IS_CRITICAL_P>(p, isCriticalPatch[p.idx()]);
 }
 
 MCBuilder::RetCode MCBuilder::updateSingleBlock(const CH& tetStart)

@@ -150,6 +150,13 @@ class MCBuilder : public virtual TetMeshManipulator
      */
     void mark90degreeBoundaryArcsAsSingular();
 
+    /**
+     * @brief Mark critical MC entities.
+     * Depending on the value of ALGO_VARIANT, this will mark only features or also singularities.
+     *
+     */
+    void markCriticalEntities();
+
     vector<bool> _isNode; // Used to mark vertices as nodes
 };
 

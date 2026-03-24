@@ -1,5 +1,7 @@
 #include "MC3D/Mesh/MCMeshProps.hpp"
 
+#include <MC3D/Util.hpp>
+
 #include <iomanip>
 
 namespace mc3d
@@ -89,7 +91,25 @@ NodeType MCMeshProps::nodeType(const VH& n) const
             else if (get<IS_SINGULAR>(a))
                 nNonFeatureSingularArcs++;
         if (nFeatureArcs == 0)
-            type.second = FeatureNodeType::REGULAR;
+        {
+            if (nNonFeatureSingularArcs == 2 && isAllocated<IS_FEATURE_F>())
+            {
+                if (containsMatching(mcMesh.vertex_faces(n), [&, this](const FH& p) { return get<IS_FEATURE_F>(p); })
+                    && containsMatching(mcMesh.vertex_edges(n),
+                                        [&, this](const EH& a)
+                                        {
+                                            return get<IS_SINGULAR>(a)
+                                                   && !containsMatching(mcMesh.edge_faces(a),
+                                                                        [&, this](const FH& p)
+                                                                        { return get<IS_FEATURE_F>(p); });
+                                        }))
+                    type.second = FeatureNodeType::SEMI_FEATURE_SINGULAR_BRANCH;
+                else
+                    type.second = FeatureNodeType::REGULAR;
+            }
+            else
+                type.second = FeatureNodeType::REGULAR;
+        }
         else if (nFeatureArcs == 2)
         {
             if (nNonFeatureSingularArcs != 0)

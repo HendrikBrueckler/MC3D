@@ -1,10 +1,40 @@
 #include "MC3D/Mesh/MCMeshNavigator.hpp"
 
+#ifdef MC3D_WITH_VIEWER
+#include <util/ImGuiUtil.h>
+#include <volumeshOS.h>
+#endif
+
 namespace mc3d
 {
 MCMeshNavigator::MCMeshNavigator(const TetMeshProps& meshProps)
     : TetMeshNavigator(meshProps), _mcMeshPropsC(*meshProps.get<MC_MESH_PROPS>())
 {
+}
+
+HFH MCMeshNavigator::safeAdjacentHalffaceInBlock(HFH hp, HEH ha) const
+{
+    auto& mcMesh = mcMeshProps().mesh();
+    auto& tetMesh = meshProps().mesh();
+
+    // Find any tet incident on any edge of ha and any hf of hp
+    bool flipHf = hp.idx() % 2 == 1;
+    auto& hfs = mcMeshProps().ref<PATCH_MESH_HALFFACES>(mcMesh.face_handle(hp));
+
+    bool flipHe = ha.idx() % 2 == 1;
+    auto& hes = mcMeshProps().ref<ARC_MESH_HALFEDGES>(mcMesh.edge_handle(ha));
+
+    HEH he = hes.front();
+    if (flipHe)
+        he = tetMesh.opposite_halfedge_handle(he);
+    HFH hf0 = findSomeOf(tetMesh.halfedge_halffaces(flipHf ? tetMesh.opposite_halfedge_handle(he) : he), hfs);
+    if (flipHf)
+        hf0 = tetMesh.opposite_halfface_handle(hf0);
+
+    HFH hfAdj = adjacentHfOnWall(hf0, he);
+    FH p = meshProps().get<MC_PATCH>(tetMesh.face_handle(hfAdj));
+
+    return mcMesh.halfface_handle(p, !mcMeshProps().ref<PATCH_MESH_HALFFACES>(p).count(hfAdj));
 }
 
 bool MCMeshNavigator::isFlatArc(const EH& arc) const
@@ -216,11 +246,9 @@ map<UVWDir, vector<HEH>> MCMeshNavigator::halfpatchHalfarcsByDir(const HFH& hp) 
     CH b = flip ? mcMeshProps().mesh().incident_cell(mcMeshProps().mesh().opposite_halfface_handle(hp))
                 : mcMeshProps().mesh().incident_cell(hp);
 
-    set<HEH> has;
+    vector<HEH> orderedHas;
     for (HEH ha : mcMeshProps().mesh().halfface_halfedges(hp))
-        has.insert(ha);
-    auto orderedHas = orderPatchHalfarcs(has);
-    assert(orderedHas.size() == has.size());
+        orderedHas.push_back(ha);
     vector<UVWDir> orderedDirs;
     for (HEH ha : orderedHas)
         orderedDirs.emplace_back(halfarcDirInBlock(ha, b));
@@ -282,14 +310,16 @@ UVWDir MCMeshNavigator::halfarcDirInBlock(const HEH& ha, const CH& b) const
     return UVWDir::NONE;
 }
 
-map<CH, Transition>
-MCMeshNavigator::determineTransitionsAroundNode(const VH& n, const CH& bRef, const Transition& transRef) const
+map<CH, vector<Transition>>
+MCMeshNavigator::determineTransitionsAroundNode(const VH& n, const CH& bRef, const Transition& transRef, bool onlyfirst) const
 {
-    map<CH, Transition> b2trans({{bRef, transRef}});
+    set<pair<CH, Vec3i>> bAndTrans({{bRef, transRef.rotation}});
+    map<CH, vector<Transition>> b2trans;
 
     auto& mcMesh = mcMeshProps().mesh();
     // Floodfill blocks around n, storing Transition for each block
     list<std::pair<CH, Transition>> bQ({{bRef, transRef}});
+    b2trans[bRef].push_back(transRef);
 
     while (!bQ.empty())
     {
@@ -300,19 +330,19 @@ MCMeshNavigator::determineTransitionsAroundNode(const VH& n, const CH& bRef, con
         {
             HFH hpOpp = mcMesh.opposite_halfface_handle(hp);
             CH bNext = mcMesh.incident_cell(hpOpp);
-            if (!bNext.is_valid() || b2trans.find(bNext) != b2trans.end())
-                continue;
-            bool hasN = false;
-            for (VH n2 : mcMesh.halfface_vertices(hp))
-                if (n2 == n)
-                {
-                    hasN = true;
-                    break;
-                }
-            if (!hasN)
+            if (!bNext.is_valid() || !contains(mcMesh.halfface_vertices(hp), n))
                 continue;
             Transition trans = b2t.second.chain(mcMeshProps().hpTransition<PATCH_TRANSITION>(hp));
-            b2trans[bNext] = trans;
+            if (onlyfirst)
+            {
+                if(b2trans.count(bNext))
+                    continue;
+            }
+            else if (bAndTrans.count({bNext, trans.rotation}))
+                continue;
+            if (!onlyfirst)
+                bAndTrans.insert({bNext, trans.rotation});
+            b2trans[b2t.first].push_back(b2t.second);
             bQ.push_back({bNext, trans});
         }
     }
@@ -320,14 +350,16 @@ MCMeshNavigator::determineTransitionsAroundNode(const VH& n, const CH& bRef, con
     return b2trans;
 }
 
-map<CH, Transition>
-MCMeshNavigator::determineTransitionsAroundArc(const EH& a, const CH& bRef, const Transition& transRef) const
+map<CH, vector<Transition>>
+MCMeshNavigator::determineTransitionsAroundArc(const EH& a, const CH& bRef, const Transition& transRef, bool onlyfirst) const
 {
-    map<CH, Transition> b2trans({{bRef, transRef}});
+    set<pair<CH, Vec3i>, std::less<pair<CH, Vec3i>>> bAndTrans({{bRef, transRef.rotation}});
+    map<CH, vector<Transition>> b2trans;
 
     auto& mcMesh = mcMeshProps().mesh();
     // Floodfill blocks around n, storing Transition for each block
     list<std::pair<CH, Transition>> bQ({{bRef, transRef}});
+    b2trans[bRef].push_back(transRef);
 
     while (!bQ.empty())
     {
@@ -338,19 +370,19 @@ MCMeshNavigator::determineTransitionsAroundArc(const EH& a, const CH& bRef, cons
         {
             HFH hpOpp = mcMesh.opposite_halfface_handle(hp);
             CH bNext = mcMesh.incident_cell(hpOpp);
-            if (!bNext.is_valid() || b2trans.find(bNext) != b2trans.end())
-                continue;
-            bool hasA = false;
-            for (EH a2 : mcMesh.halfface_edges(hp))
-                if (a2 == a)
-                {
-                    hasA = true;
-                    break;
-                }
-            if (!hasA)
+            if (!bNext.is_valid() || !contains(mcMesh.halfface_edges(hp), a))
                 continue;
             Transition trans = b2t.second.chain(mcMeshProps().hpTransition<PATCH_TRANSITION>(hp));
-            b2trans[bNext] = trans;
+            if (onlyfirst)
+            {
+                if(b2trans.count(bNext))
+                    continue;
+            }
+            else if (bAndTrans.count({bNext, trans.rotation}))
+                continue;
+            if (!onlyfirst)
+                bAndTrans.insert({bNext, trans.rotation});
+            b2trans[b2t.first].push_back(b2t.second);
             bQ.push_back({bNext, trans});
         }
     }
@@ -607,103 +639,190 @@ void MCMeshNavigator::getBoundaryRegions(vector<BoundaryRegion>& boundaryRegions
     }
 }
 
-void MCMeshNavigator::getCriticalLinks(vector<CriticalLink>& criticalLinks,
-                                       map<EH, int>& a2criticalLinkIdx,
-                                       map<VH, vector<int>>& n2criticalLinksOut,
-                                       map<VH, vector<int>>& n2criticalLinksIn,
-                                       bool includeFeatures) const
+void MCMeshNavigator::getCriticalEntities(vector<bool>& isCriticalNode,
+                                          vector<bool>& isCriticalArc,
+                                          vector<bool>& isCriticalPatch,
+                                          vector<CriticalEntity>& criticalEntities,
+                                          map<EH, int>& a2criticalLinkIdx,
+                                          map<FH, int>& p2criticalRegionIdx,
+                                          map<VH, vector<int>>& n2criticalLinksOut,
+                                          map<VH, vector<int>>& n2criticalLinksIn,
+                                          bool includeFeatures,
+                                          bool includeSingularities,
+                                          bool forceBoundaries) const
 {
     const MCMesh& mcMesh = mcMeshProps().mesh();
-    (void)includeFeatures;
 
-    criticalLinks.clear();
+    // First mark the entities according to request
+    isCriticalNode = vector<bool>(mcMesh.n_vertices(), false);
+    isCriticalArc = vector<bool>(mcMesh.n_edges(), false);
+    isCriticalPatch = vector<bool>(mcMesh.n_faces(), false);
+
+    for (FH p : mcMesh.faces())
+        if ((mcMeshProps().isAllocated<IS_FEATURE_F>() && mcMeshProps().get<IS_FEATURE_F>(p))
+            || (mcMesh.is_boundary(p) && forceBoundaries))
+            isCriticalPatch[p.idx()] = true;
+
+    for (EH a : mcMesh.edges())
+    {
+        if (((includeSingularities || (mcMesh.is_boundary(a) && forceBoundaries)) && mcMeshProps().get<IS_SINGULAR>(a))
+            || (includeFeatures && mcMeshProps().isAllocated<IS_FEATURE_E>() && mcMeshProps().get<IS_FEATURE_E>(a)))
+            isCriticalArc[a.idx()] = true;
+    }
+
+    for (VH n : mcMesh.vertices())
+    {
+        auto type = mcMeshProps().nodeType(n);
+        if ((includeSingularities && type.first == SingularNodeType::SINGULAR)
+            || (includeFeatures && type.second == FeatureNodeType::FEATURE)
+            || ((includeFeatures && includeSingularities)
+                && type.second == FeatureNodeType::SEMI_FEATURE_SINGULAR_BRANCH))
+            isCriticalNode[n.idx()] = true;
+        if (forceBoundaries && !isCriticalNode[n.idx()] && type.first == SingularNodeType::SINGULAR)
+        {
+            int numSingularAs = 0;
+            for (EH a : mcMesh.vertex_edges(n))
+                if (mcMesh.is_boundary(a) && mcMeshProps().get<IS_SINGULAR>(a))
+                    numSingularAs++;
+            if (numSingularAs != 0 && numSingularAs != 2)
+                isCriticalNode[n.idx()] = true;
+        }
+    }
+
+    // Then floodfill the entities and detect special cases like cyclic links and borderless regions
+    criticalEntities.clear();
     a2criticalLinkIdx.clear();
     n2criticalLinksOut.clear();
     n2criticalLinksIn.clear();
 
-    vector<bool> arcIsCritical(mcMesh.n_edges(), false);
-    for (EH a : mcMesh.edges())
-        if (mcMeshProps().get<IS_SINGULAR>(a)
-            || (includeFeatures && mcMeshProps().isAllocated<IS_FEATURE_E>() && mcMeshProps().get<IS_FEATURE_E>(a)))
-            arcIsCritical[a.idx()] = true;
-
     set<VH> nsStart;
     for (VH n : mcMesh.vertices())
-    {
-        auto type = mcMeshProps().nodeType(n);
-        if (type.first == SingularNodeType::SINGULAR
-            || (includeFeatures
-                && (type.second == FeatureNodeType::FEATURE
-                    || type.second == FeatureNodeType::SEMI_FEATURE_SINGULAR_BRANCH)))
+        if (isCriticalNode[n.idx()])
             nsStart.insert(n);
-    }
 
-    for (VH nStart : nsStart)
+    int nNodes = 0;
+    auto addNode = [&, this](const VH& n)
     {
-        bool hasCriticalArc = false;
+        CriticalEntity node;
+        node.id = criticalEntities.size();
+        node.dim = 0;
+        node.nFrom = n;
+        node.nTo = n;
+        node.pathHas = {};
+        node.regionPs = {};
+        node.regionBoundaryAs = {};
+        criticalEntities.emplace_back(node);
+        n2criticalLinksIn[n].emplace_back(node.id);
+        n2criticalLinksOut[n].emplace_back(node.id);
+        nNodes++;
+    };
+
+    // Register critical nodes as critical entities
+    for (VH nStart : nsStart)
+        addNode(nStart);
+
+    // Register critical links as critical entities
+    for (VH nStart : nsStart)
         for (HEH ha : mcMesh.outgoing_halfedges(nStart))
         {
             EH a = mcMesh.edge_handle(ha);
-            if (arcIsCritical[a.idx()])
+            if (isCriticalArc[a.idx()] && !a2criticalLinkIdx.count(a))
+                traceCriticalLink(ha,
+                                  isCriticalArc,
+                                  nsStart,
+                                  criticalEntities,
+                                  a2criticalLinkIdx,
+                                  n2criticalLinksOut,
+                                  n2criticalLinksIn);
+        }
+
+    // ...also cyclic ones with singular node
+    for (VH nStart : mcMesh.vertices())
+        if (mcMeshProps().nodeType(nStart).first == SingularNodeType::SINGULAR)
+            for (HEH ha : mcMesh.outgoing_halfedges(nStart))
             {
-                hasCriticalArc = true;
-                if (a2criticalLinkIdx.find(a) == a2criticalLinkIdx.end())
+                EH a = mcMesh.edge_handle(ha);
+                if (isCriticalArc[a.idx()] && !a2criticalLinkIdx.count(a))
                 {
+                    // Create new critical node
+                    // isCriticalNode[nStart.idx()] = true;
+                    nsStart.insert(nStart);
+
+                    // Trace critical link from that node
                     traceCriticalLink(ha,
-                                      arcIsCritical,
+                                      isCriticalArc,
                                       nsStart,
-                                      criticalLinks,
+                                      criticalEntities,
                                       a2criticalLinkIdx,
                                       n2criticalLinksOut,
                                       n2criticalLinksIn);
                 }
             }
-        }
-        if (!hasCriticalArc)
-        {
-            CriticalLink link;
-            link.cyclic = false;
-            link.nFrom = nStart;
-            link.nTo = nStart;
-            link.length = 0;
-            link.pathHas = {};
-            criticalLinks.emplace_back(link);
-            n2criticalLinksIn[nStart].emplace_back(criticalLinks.size() - 1);
-            n2criticalLinksOut[nStart].emplace_back(criticalLinks.size() - 1);
-        }
-    }
 
+    // ...also cyclic ones with no singular node
     for (EH a : mcMesh.edges())
-        if (arcIsCritical[a.idx()] && a2criticalLinkIdx.find(a) == a2criticalLinkIdx.end())
-            traceCriticalLink(mcMesh.halfedge_handle(a, 0),
-                              arcIsCritical,
-                              nsStart,
-                              criticalLinks,
-                              a2criticalLinkIdx,
-                              n2criticalLinksOut,
-                              n2criticalLinksIn);
-    DLOG(INFO) << "Found " << criticalLinks.size() << " critical links with " << a2criticalLinkIdx.size()
-               << " critical arcs and " << nsStart.size() << " critical nodes";
+        if (isCriticalArc[a.idx()] && !a2criticalLinkIdx.count(a))
+        {
+            HEH ha = mcMesh.halfedge_handle(a, 0);
+            VH nStart = mcMesh.from_vertex_handle(ha);
+
+            // Create new critical node
+            // isCriticalNode[nStart.idx()] = true;
+            nsStart.insert(nStart);
+
+            // addNode(nStart);
+
+            traceCriticalLink(
+                ha, isCriticalArc, nsStart, criticalEntities, a2criticalLinkIdx, n2criticalLinksOut, n2criticalLinksIn);
+        }
+
+    int nLinks = criticalEntities.size() - nNodes;
+
+    // Also include critical regions without boundary (e.g. sphere surface)
+    for (FH p : mcMesh.faces())
+        if (isCriticalPatch[p.idx()] && !p2criticalRegionIdx.count(p))
+        {
+            traceCriticalRegion(p, isCriticalArc, isCriticalPatch, criticalEntities, p2criticalRegionIdx);
+
+            auto& criticalRegion = criticalEntities.back();
+            set<EH> trueBoundary;
+            for (EH a : criticalRegion.regionBoundaryAs)
+            {
+                int nPs = 0;
+                for (FH p2 : mcMesh.edge_faces(a))
+                    if (isCriticalPatch[p2.idx()] && p2criticalRegionIdx.count(p2)
+                        && p2criticalRegionIdx.at(p2) == criticalRegion.id)
+                        nPs++;
+                if (nPs != 2)
+                    trueBoundary.insert(a);
+            }
+        }
+
+    int nRegions = criticalEntities.size() - nNodes - nLinks;
+
+    DLOG(INFO) << "Found " << criticalEntities.size() << " critical entities, of which nodes: " << nNodes
+               << ", links: " << nLinks << ", regions: " << nRegions;
 }
 
 void MCMeshNavigator::traceCriticalLink(const HEH& haStart,
-                                        const vector<bool>& arcIsCritical,
+                                        const vector<bool>& isCriticalArc,
                                         set<VH>& nsStop,
-                                        vector<CriticalLink>& criticalLinks,
+                                        vector<CriticalEntity>& criticalEntities,
                                         map<EH, int>& a2criticalLinkIdx,
                                         map<VH, vector<int>>& n2criticalLinksOut,
                                         map<VH, vector<int>>& n2criticalLinksIn) const
 {
     const MCMesh& mcMesh = mcMeshProps().mesh();
 
-    size_t idx = criticalLinks.size();
-    criticalLinks.emplace_back();
-    auto& criticalPath = criticalLinks.back();
-    criticalPath.id = criticalLinks.size() - 1;
-    VH nStart = mcMesh.from_vertex_handle(haStart);
-    criticalPath.cyclic = nsStop.find(nStart) == nsStop.end();
-    if (criticalPath.cyclic)
-        nsStop.insert(nStart);
+    CriticalEntity criticalLink;
+    criticalLink.id = criticalEntities.size();
+    criticalLink.dim = 1;
+    criticalLink.pathHas = {};
+    criticalLink.regionPs = {};
+    criticalLink.regionBoundaryAs = {};
+    criticalLink.nFrom = mcMesh.from_vertex_handle(haStart);
+    if (!nsStop.count(criticalLink.nFrom))
+        throw std::logic_error("Tracing without starting node");
 
     // Gather Halfedges
     HEH haCurr = haStart;
@@ -711,29 +830,67 @@ void MCMeshNavigator::traceCriticalLink(const HEH& haStart,
     VH nCurr = mcMesh.to_vertex_handle(haCurr);
     while (nsStop.find(nCurr) == nsStop.end())
     {
-        criticalPath.pathHas.emplace_back(haCurr);
+        criticalLink.pathHas.emplace_back(haCurr);
         haCurr = findMatching(mcMesh.outgoing_halfedges(nCurr),
-                              [&](const HEH& haNext) {
+                              [&](const HEH& haNext)
+                              {
                                   return mcMesh.opposite_halfedge_handle(haNext) != haCurr
-                                         && arcIsCritical[mcMesh.edge_handle(haNext).idx()];
+                                         && isCriticalArc[mcMesh.edge_handle(haNext).idx()];
                               });
         aCurr = mcMesh.edge_handle(haCurr);
         nCurr = mcMesh.to_vertex_handle(haCurr);
     }
-    criticalPath.pathHas.emplace_back(haCurr);
+    criticalLink.pathHas.emplace_back(haCurr);
 
     // Gather meta info
-    criticalPath.nFrom = nStart;
-    criticalPath.nTo = mcMesh.to_vertex_handle(criticalPath.pathHas.back());
-    n2criticalLinksOut[criticalPath.nFrom].emplace_back(idx);
-    n2criticalLinksIn[criticalPath.nTo].emplace_back(idx);
-    criticalPath.length = 0;
-    for (HEH ha : criticalPath.pathHas)
+    criticalLink.nTo = mcMesh.to_vertex_handle(criticalLink.pathHas.back());
+    for (HEH ha : criticalLink.pathHas)
+        a2criticalLinkIdx[mcMesh.edge_handle(ha)] = criticalLink.id;
+    criticalEntities.emplace_back(criticalLink);
+    n2criticalLinksOut[criticalLink.nFrom].emplace_back(criticalLink.id);
+    n2criticalLinksIn[criticalLink.nTo].emplace_back(criticalLink.id);
+}
+
+void MCMeshNavigator::traceCriticalRegion(const FH& pStart,
+                                          const vector<bool>& isCriticalArc,
+                                          const vector<bool>& isCriticalPatch,
+                                          vector<CriticalEntity>& criticalEntities,
+                                          map<FH, int>& p2criticalRegionIdx) const
+{
+    const MCMesh& mcMesh = mcMeshProps().mesh();
+
+    CriticalEntity criticalRegion;
+    criticalRegion.id = criticalEntities.size();
+    criticalRegion.dim = 2;
+    criticalRegion.pathHas = {};
+    criticalRegion.regionPs = {{pStart}};
+    criticalRegion.regionBoundaryAs = {};
+    criticalRegion.nFrom = criticalRegion.nTo = VH();
+
+    list<FH> pQ({pStart});
+    while (!pQ.empty())
     {
-        a2criticalLinkIdx[mcMesh.edge_handle(ha)] = idx;
-        if (mcMeshProps().isAllocated<ARC_INT_LENGTH>())
-            criticalPath.length += mcMeshProps().get<ARC_INT_LENGTH>(mcMesh.edge_handle(ha));
+        FH p = pQ.front();
+        pQ.pop_front();
+
+        for (EH a : mcMesh.face_edges(p))
+        {
+            if (isCriticalArc[a.idx()])
+                criticalRegion.regionBoundaryAs.insert(a);
+            else
+                for (FH pNext : mcMesh.edge_faces(a))
+                {
+                    if (!criticalRegion.regionPs.count(pNext) && isCriticalPatch[pNext.idx()])
+                    {
+                        pQ.push_back(pNext);
+                        criticalRegion.regionPs.insert(pNext);
+                    }
+                }
+        }
     }
+    for (FH p : criticalRegion.regionPs)
+        p2criticalRegionIdx[p] = criticalRegion.id;
+    criticalEntities.emplace_back(criticalRegion);
 }
 
 void MCMeshNavigator::assertValidMC(bool minimality, bool exhaustive) const
@@ -763,6 +920,45 @@ void MCMeshNavigator::assertValidMC(bool minimality, bool exhaustive) const
     assert(mcMeshProps().isAllocated<IS_SINGULAR>());
     assert(mcMeshProps().isAllocated<ARC_MESH_HALFEDGES>());
     assert(mcMeshProps().isAllocated<NODE_MESH_VERTEX>());
+
+    assert(mcMesh.n_logical_faces() >= 4);
+
+    for (CH b : mcMesh.cells())
+    {
+        set<EH> edgeAs;
+        for (auto& kv : mcMeshProps().ref<BLOCK_EDGE_ARCS>(b))
+            for (EH a : kv.second)
+                edgeAs.insert(a);
+        set<EH> faceAs;
+        for (auto& kv : mcMeshProps().ref<BLOCK_FACE_ARCS>(b))
+            for (EH a : kv.second)
+                faceAs.insert(a);
+        for (EH a : mcMesh.cell_edges(b))
+            assert(edgeAs.count(a) || faceAs.count(a));
+    }
+
+    for (FH p : mcMesh.faces())
+    {
+        auto side2has = halfpatchHalfarcsByDir(mcMesh.halfface_handle(p, 0));
+        int nNonZero = 0;
+        for (auto& kv : side2has)
+        {
+            bool nonZero = !mcMeshProps().isAllocated<ARC_INT_LENGTH>();
+            if (!nonZero)
+                for (HEH ha : kv.second)
+                    if (mcMeshProps().get<ARC_INT_LENGTH>(mcMesh.edge_handle(ha)))
+                    {
+                        nonZero = true;
+                        break;
+                    }
+            if (nonZero)
+                nNonZero++;
+        }
+        if (nNonZero == 1 || nNonZero == 3)
+            LOG(INFO) << nNonZero << " nonzero sides for patch " << p;
+        assert(nNonZero != 1);
+        assert(nNonZero != 3);
+    }
 
     for (CH tet : tetMesh.cells())
     {
@@ -817,7 +1013,9 @@ void MCMeshNavigator::assertValidMC(bool minimality, bool exhaustive) const
                 if (node.is_valid())
                 {
                     if (minimality)
-                        assert(nArcs > 2);
+                        assert((mcMeshProps().isAllocated<IS_FEATURE_V>() && mcMeshProps().get<IS_FEATURE_V>(node))
+                               || (mcMeshProps().isAllocated<IS_CRITICAL_N>() && mcMeshProps().get<IS_CRITICAL_N>(node))
+                               || nArcs > 2);
                     assert(!mcMesh.is_deleted(node));
                 }
                 else
@@ -831,99 +1029,124 @@ void MCMeshNavigator::assertValidMC(bool minimality, bool exhaustive) const
         // Ensure valid topology: check that each arcs halfarcs are included
         set<EH> blockArcs;
         set<HEH> patchHalfarcs;
+        set<VH> blockNodes;
+        set<FH> blockPatches;
+        for (auto n : mcMesh.cell_vertices(block))
+            blockNodes.insert(n);
         for (auto a : mcMesh.cell_edges(block))
             blockArcs.insert(a);
         for (auto hp : mcMesh.cell_halffaces(block))
+        {
+            blockPatches.insert(mcMesh.face_handle(hp));
             for (auto ha : mcMesh.halfface_halfedges(hp))
                 patchHalfarcs.insert(ha);
+        }
         for (auto a : blockArcs)
             for (auto ha : mcMesh.edge_halfedges(a))
                 assert(patchHalfarcs.count(ha) != 0);
         for (auto ha : patchHalfarcs)
             assert(blockArcs.count(mcMesh.edge_handle(ha)) != 0);
 
-        const auto cornerNodes = mcMeshProps().ref<BLOCK_CORNER_NODES>(block);
+        const auto& cornerNodes = mcMeshProps().ref<BLOCK_CORNER_NODES>(block);
+        const auto& edgeArcs = mcMeshProps().ref<BLOCK_EDGE_ARCS>(block);
+        const auto& facePatches = mcMeshProps().ref<BLOCK_FACE_PATCHES>(block);
+        const auto& edgeNodes = mcMeshProps().ref<BLOCK_EDGE_NODES>(block);
+        const auto& faceArcs = mcMeshProps().ref<BLOCK_FACE_ARCS>(block);
+        const auto& faceNodes = mcMeshProps().ref<BLOCK_FACE_NODES>(block);
         assert(cornerNodes.size() == DIM_3_DIRS.size());
         for (UVWDir dir3 : DIM_3_DIRS)
             assert(cornerNodes.find(dir3) != cornerNodes.end());
         for (const auto& kv : cornerNodes)
         {
             auto& node = kv.second;
+            assert(blockNodes.count(node));
+            if (!isZeroBlock(block))
+            {
+                assert(!containsMatching(
+                    edgeNodes, [&](const pair<const UVWDir, set<VH>>& kv2) { return kv2.second.count(node); }));
+                assert(!containsMatching(
+                    faceNodes, [&](const pair<const UVWDir, set<VH>>& kv2) { return kv2.second.count(node); }));
+            }
             assert(node.is_valid());
             assert(node.uidx() < mcMesh.n_vertices());
             assert(!mcMesh.is_deleted(node));
         }
 
-        const auto edgeArcs = mcMeshProps().ref<BLOCK_EDGE_ARCS>(block);
         assert(edgeArcs.size() == DIM_2_DIRS.size());
         for (UVWDir dir2 : DIM_2_DIRS)
             assert(edgeArcs.find(dir2) != edgeArcs.end());
         for (const auto& kv : edgeArcs)
         {
             auto& arcs = kv.second;
-            if (exhaustive)
+            if (!isZeroBlock(block))
                 assert(!arcs.empty());
             for (EH arc : arcs)
             {
+                if (!isZeroBlock(block))
+                    assert(!containsMatching(
+                        faceArcs, [&](const pair<const UVWDir, set<EH>>& kv2) { return kv2.second.count(arc); }));
                 assert(arc.is_valid());
                 assert(arc.uidx() < mcMesh.n_edges());
                 assert(!mcMesh.is_deleted(arc));
+                assert(blockArcs.count(arc));
             }
         }
 
-        const auto facePatches = mcMeshProps().ref<BLOCK_FACE_PATCHES>(block);
         assert(facePatches.size() == DIM_1_DIRS.size());
         for (UVWDir dir1 : DIM_1_DIRS)
             assert(facePatches.find(dir1) != facePatches.end());
         for (const auto& kv : facePatches)
         {
             auto& patches = kv.second;
-            if (exhaustive)
+            if (!isZeroBlock(block))
                 assert(!patches.empty());
             for (FH patch : patches)
             {
                 assert(patch.is_valid());
                 assert(patch.uidx() < mcMesh.n_faces());
                 assert(!mcMesh.is_deleted(patch));
+                assert(blockPatches.count(patch));
             }
         }
 
-        const auto edgeNodes = mcMeshProps().ref<BLOCK_EDGE_NODES>(block);
         assert(edgeNodes.size() == DIM_2_DIRS.size());
         for (const auto& kv : edgeNodes)
         {
             auto& nodes = kv.second;
-            if (exhaustive)
+            if (!isZeroBlock(block))
                 assert((nodes.size() > 0) == (edgeArcs.at(kv.first).size() > 1));
             for (VH node : nodes)
             {
+                if (!isZeroBlock(block))
+                    assert(!containsMatching(
+                        faceNodes, [&](const pair<const UVWDir, set<VH>>& kv2) { return kv2.second.count(node); }));
                 assert(node.is_valid());
                 assert(node.uidx() < mcMesh.n_vertices());
                 assert(!mcMesh.is_deleted(node));
+                assert(blockNodes.count(node));
             }
         }
 
-        const auto& faceArcs = mcMeshProps().ref<BLOCK_FACE_ARCS>(block);
         assert(faceArcs.size() == DIM_1_DIRS.size());
         for (const auto& kv : faceArcs)
         {
             auto& arcs = kv.second;
-            if (exhaustive)
+            if (!isZeroBlock(block))
                 assert((arcs.size() > 0) == (facePatches.at(kv.first).size() > 1));
             for (EH arc : arcs)
             {
                 assert(arc.is_valid());
                 assert(arc.uidx() < mcMesh.n_edges());
                 assert(!mcMesh.is_deleted(arc));
+                assert(blockArcs.count(arc));
             }
         }
 
-        const auto& faceNodes = mcMeshProps().ref<BLOCK_FACE_NODES>(block);
         assert(faceNodes.size() == DIM_1_DIRS.size());
         for (const auto& kv : faceNodes)
         {
             auto& nodes = kv.second;
-            if (exhaustive)
+            if (!isZeroBlock(block))
                 if (nodes.size() > 0)
                     assert(faceArcs.at(kv.first).size() > 1 && facePatches.at(kv.first).size() > 1);
             for (VH node : nodes)
@@ -931,10 +1154,12 @@ void MCMeshNavigator::assertValidMC(bool minimality, bool exhaustive) const
                 assert(node.is_valid());
                 assert(node.uidx() < mcMesh.n_vertices());
                 assert(!mcMesh.is_deleted(node));
+                assert(blockNodes.count(node));
             }
         }
 
-        assert(!mcMeshProps().ref<BLOCK_MESH_TETS>(block).empty());
+        if (!isZeroBlock(block))
+            assert(!mcMeshProps().ref<BLOCK_MESH_TETS>(block).empty());
         for (const auto& tet : mcMeshProps().ref<BLOCK_MESH_TETS>(block))
         {
             assert(tet.is_valid());
@@ -948,30 +1173,46 @@ void MCMeshNavigator::assertValidMC(bool minimality, bool exhaustive) const
     {
         set<CH> bs;
         set<CH> bsCheck;
+        bool unfit = false;
         for (auto b : mcMesh.face_cells(patch))
             if (b.is_valid())
-                bs.insert(b);
-        assert(!mcMeshProps().ref<PATCH_MESH_HALFFACES>(patch).empty());
+            {
+                if (!mcMeshProps().ref<BLOCK_MESH_TETS>(b).empty())
+                    bs.insert(b);
+                else
+                    unfit = true;
+            }
+        auto bs01 = mcMesh.face_cells(patch);
+        if (!isZeroPatch(patch) && !unfit)
+            assert(!mcMeshProps().ref<PATCH_MESH_HALFFACES>(patch).empty());
         for (const auto& hf : mcMeshProps().ref<PATCH_MESH_HALFFACES>(patch))
         {
             assert(hf.is_valid());
             assert(hf.uidx() < tetMesh.n_halffaces());
             assert(!tetMesh.is_deleted(hf));
-            assert(meshProps().hfTransition<TRANSITION>(hf) == mcMeshProps().ref<PATCH_TRANSITION>(patch));
             assert(meshProps().get<MC_PATCH>(tetMesh.face_handle(hf)) == patch);
             for (auto tet : tetMesh.face_cells(tetMesh.face_handle(hf)))
                 if (tet.is_valid())
                     bsCheck.insert(meshProps().get<MC_BLOCK>(tet));
+            assert(!bs01[0].is_valid() || meshProps().get<MC_BLOCK>(tetMesh.incident_cell(hf)) == bs01[0]);
+            assert(!bs01[1].is_valid()
+                   || meshProps().get<MC_BLOCK>(tetMesh.incident_cell(tetMesh.opposite_halfface_handle(hf))) == bs01[1]);
         }
-        assert(bs == bsCheck);
+        if (!unfit && !mcMeshProps().ref<PATCH_MESH_HALFFACES>(patch).empty())
+            assert(bs == bsCheck);
     }
     for (EH arc : mcMesh.edges())
     {
         set<FH> ps;
         set<FH> psCheck;
+        bool unfit = false;
         for (auto p : mcMesh.edge_faces(arc))
-            ps.insert(p);
-        assert(!mcMeshProps().ref<ARC_MESH_HALFEDGES>(arc).empty());
+            if (!mcMeshProps().ref<PATCH_MESH_HALFFACES>(p).empty())
+                ps.insert(p);
+            else
+                unfit = true;
+        if (!unfit && !isZeroArc(arc))
+            assert(!mcMeshProps().ref<ARC_MESH_HALFEDGES>(arc).empty());
         for (const auto& he : mcMeshProps().ref<ARC_MESH_HALFEDGES>(arc))
         {
             assert(he.is_valid());
@@ -982,13 +1223,19 @@ void MCMeshNavigator::assertValidMC(bool minimality, bool exhaustive) const
                 if (meshProps().isInPatch(f))
                     psCheck.insert(meshProps().get<MC_PATCH>(f));
         }
+        if (!unfit && !mcMeshProps().ref<ARC_MESH_HALFEDGES>(arc).empty())
+            assert(ps == psCheck);
     }
     for (VH node : mcMesh.vertices())
     {
         set<EH> as;
         set<EH> asCheck;
+        bool unfit = false;
         for (auto a : mcMesh.vertex_edges(node))
-            as.insert(a);
+            if (!mcMeshProps().ref<ARC_MESH_HALFEDGES>(a).empty())
+                as.insert(a);
+            else
+                unfit = true;
         VH v = mcMeshProps().get<NODE_MESH_VERTEX>(node);
         assert(v.is_valid());
         assert(v.uidx() < tetMesh.n_vertices());
@@ -997,7 +1244,8 @@ void MCMeshNavigator::assertValidMC(bool minimality, bool exhaustive) const
         for (auto e : tetMesh.vertex_edges(v))
             if (meshProps().isInArc(e))
                 asCheck.insert(meshProps().get<MC_ARC>(e));
-        assert(asCheck == as);
+        if (!unfit)
+            assert(asCheck == as);
     }
 
     if (meshProps().isAllocated<IS_FEATURE_V>())
@@ -1118,7 +1366,7 @@ void MCMeshNavigator::assertValidMC(bool minimality, bool exhaustive) const
                 bool isFeature = mcMeshProps().isAllocated<IS_FEATURE_E>() && mcMeshProps().get<IS_FEATURE_E>(arc);
                 auto itPair = mcMesh.halfedge_halffaces(mcMesh.halfedge_handle(arc, 0));
                 vector<HFH> hps(itPair.first, itPair.second);
-                if ((!isSingular && !isFeature) || hps.size() <= 2)
+                if ((!isSingular && !isFeature) && hps.size() <= 2)
                 {
                     assert(hps.size() == 2 && mcMesh.is_boundary(mcMesh.face_handle(hps[0]))
                            && mcMesh.is_boundary(mcMesh.face_handle(hps[1])));
@@ -1222,6 +1470,25 @@ void MCMeshNavigator::assertValidMC(bool minimality, bool exhaustive) const
                 else
                     esBoundary.erase(e);
         assert(es == esBoundary);
+
+        if (!mcMesh.is_boundary(p))
+        {
+            auto hps = mcMesh.face_halffaces(p);
+            auto bs2 = mcMesh.face_cells(p);
+            auto trans = mcMeshProps().get<PATCH_TRANSITION>(p);
+            if (isZeroBlock(bs2[0]) || isZeroBlock(bs2[1]) || isZeroPatch(p))
+                continue;
+            if (bs2[0] == bs2[1])
+                continue; // Can't properly handle selfadjacency yet
+            assert(halfpatchNormalDir(hps[1]) == -trans.rotate(halfpatchNormalDir(hps[0])));
+            for (EH a : mcMesh.face_edges(p))
+            {
+                if (isZeroArc(a))
+                    continue;
+                HEH ha = mcMesh.halfedge_handle(a, 0);
+                assert(halfarcDirInBlock(ha, bs2[1]) == trans.rotate(halfarcDirInBlock(ha, bs2[0])));
+            }
+        }
     }
 
     for (CH b : mcMesh.cells())
@@ -1599,7 +1866,10 @@ void MCMeshNavigator::assertManifoldBlock(const CH& b) const
             LOG(INFO) << "Block " << b << " is patch-selfadjacent via " << p;
             for (HFH hf : mcMeshProps().ref<PATCH_MESH_HALFFACES>(p))
                 for (HEH he : tetMesh.face_halfedges(tetMesh.face_handle(hf)))
+                {
                     selfadjacentHes.insert(he);
+                    selfadjacentHes.insert(tetMesh.opposite_halfedge_handle(he));
+                }
         }
     }
     set<VH> nodeVertices;
@@ -1619,7 +1889,10 @@ void MCMeshNavigator::assertManifoldBlock(const CH& b) const
         {
             LOG(INFO) << "Block " << b << " is arc-selfadjacent via " << mcMesh.edge_handle(kv.first);
             for (HEH he : mcMeshProps().haHalfedges(kv.first))
+            {
                 selfadjacentHes.insert(he);
+                selfadjacentHes.insert(tetMesh.opposite_halfedge_handle(he));
+            }
         }
 
     set<VH> selfadjacentVs;
@@ -1718,6 +1991,409 @@ void MCMeshNavigator::assertManifoldBlock(const CH& b) const
         }
         assert(hfVisited.size() == kv.second.size());
     }
+#endif
+}
+
+void MCMeshNavigator::debugViewMC() const
+{
+#ifdef MC3D_WITH_VIEWER
+    auto& tetMesh = meshProps().mesh();
+    auto& mcMesh = mcMeshProps().mesh();
+    set<HFH> patchHfs;
+    set<HFH> zeroHfs;
+    for (FH p : mcMesh.faces())
+    {
+        bool hasZeroLength = false;
+        if (mcMeshProps().isAllocated<ARC_INT_LENGTH>())
+            for (auto kv : halfpatchHalfarcsByDir(mcMesh.halfface_handle(p, 0)))
+            {
+                int length = 0;
+                for (HEH ha : kv.second)
+                    length += mcMeshProps().get<ARC_INT_LENGTH>(mcMesh.edge_handle(ha));
+                if (length == 0)
+                    hasZeroLength = true;
+            }
+        if (hasZeroLength)
+            for (HFH hf : mcMeshProps().ref<PATCH_MESH_HALFFACES>(p))
+                for (HFH hf2 : tetMesh.face_halffaces(tetMesh.face_handle(hf)))
+                    zeroHfs.insert(hf2);
+        else
+            for (HFH hf : mcMeshProps().ref<PATCH_MESH_HALFFACES>(p))
+                for (HFH hf2 : tetMesh.face_halffaces(tetMesh.face_handle(hf)))
+                    patchHfs.insert(hf2);
+    }
+    set<EH> arcEs, singularArcEs, zeroEs;
+    for (EH a : mcMesh.edges())
+    {
+        if (mcMeshProps().get<IS_SINGULAR>(a))
+            for (HEH he : mcMeshProps().ref<ARC_MESH_HALFEDGES>(a))
+                singularArcEs.insert(tetMesh.edge_handle(he));
+        else
+            for (HEH he : mcMeshProps().ref<ARC_MESH_HALFEDGES>(a))
+                arcEs.insert(tetMesh.edge_handle(he));
+        if (mcMeshProps().isAllocated<ARC_INT_LENGTH>() && mcMeshProps().get<ARC_INT_LENGTH>(a) == 0)
+        {
+            for (HEH he : mcMeshProps().ref<ARC_MESH_HALFEDGES>(a))
+                zeroEs.insert(tetMesh.edge_handle(he));
+        }
+    }
+    set<VH> nodeVs, singularNodeVs;
+    for (VH n : mcMesh.vertices())
+    {
+        auto type = mcMeshProps().nodeType(n);
+        if (type.first == SingularNodeType::REGULAR)
+            nodeVs.insert(mcMeshProps().ref<NODE_MESH_VERTEX>(n));
+        else
+            singularNodeVs.insert(mcMeshProps().ref<NODE_MESH_VERTEX>(n));
+    }
+    debugView(zeroHfs, patchHfs, {}, {}, singularArcEs, zeroEs, arcEs, singularNodeVs, {}, nodeVs);
+#endif
+}
+
+void MCMeshNavigator::debugViewMC(const EH& a) const
+{
+    (void)a;
+#ifdef MC3D_WITH_VIEWER
+    auto& tetMesh = meshProps().mesh();
+    auto& mcMesh = mcMeshProps().mesh();
+    set<HFH> patchHfs;
+    set<HFH> zeroHfs;
+    set<EH> arcEs, singularArcEs, greenEs;
+    set<VH> nodeVs, singularNodeVs;
+    auto ans = mcMesh.edge_vertices(a);
+    for (HEH he : mcMeshProps().ref<ARC_MESH_HALFEDGES>(a))
+        arcEs.insert(tetMesh.edge_handle(he));
+    for (FH p : mcMesh.faces())
+    {
+        bool containsA = contains(mcMesh.face_vertices(p), ans[0]) || contains(mcMesh.face_vertices(p), ans[1]);
+        if (!containsA)
+            continue;
+        bool hasZeroLength = false;
+        if (mcMeshProps().isAllocated<ARC_INT_LENGTH>())
+            for (auto kv : halfpatchHalfarcsByDir(mcMesh.halfface_handle(p, 0)))
+            {
+                int length = 0;
+                for (HEH ha : kv.second)
+                    length += mcMeshProps().get<ARC_INT_LENGTH>(mcMesh.edge_handle(ha));
+                if (length == 0)
+                    hasZeroLength = true;
+            }
+        if (hasZeroLength)
+            for (HFH hf : mcMeshProps().ref<PATCH_MESH_HALFFACES>(p))
+                for (HFH hf2 : tetMesh.face_halffaces(tetMesh.face_handle(hf)))
+                    zeroHfs.insert(hf2);
+        else
+            for (HFH hf : mcMeshProps().ref<PATCH_MESH_HALFFACES>(p))
+                for (HFH hf2 : tetMesh.face_halffaces(tetMesh.face_handle(hf)))
+                    patchHfs.insert(hf2);
+
+        for (EH a2 : mcMesh.face_edges(p))
+        {
+            if (a2 == a)
+                continue;
+            if (mcMeshProps().get<IS_SINGULAR>(a2))
+                for (HEH he : mcMeshProps().ref<ARC_MESH_HALFEDGES>(a2))
+                    singularArcEs.insert(tetMesh.edge_handle(he));
+            else
+                for (HEH he : mcMeshProps().ref<ARC_MESH_HALFEDGES>(a2))
+                    greenEs.insert(tetMesh.edge_handle(he));
+        }
+        for (VH n : mcMesh.face_vertices(p))
+        {
+            auto type = mcMeshProps().nodeType(n);
+            if (type.first == SingularNodeType::REGULAR)
+                nodeVs.insert(mcMeshProps().ref<NODE_MESH_VERTEX>(n));
+            else
+                singularNodeVs.insert(mcMeshProps().ref<NODE_MESH_VERTEX>(n));
+        }
+    }
+    debugView(zeroHfs, patchHfs, {}, {}, singularArcEs, greenEs, arcEs, singularNodeVs, {}, nodeVs);
+#endif
+}
+
+void MCMeshNavigator::debugViewMC(const VH& n) const
+{
+    (void)n;
+#ifdef MC3D_WITH_VIEWER
+    auto& tetMesh = meshProps().mesh();
+    auto& mcMesh = mcMeshProps().mesh();
+    set<HFH> patchHfs;
+    set<HFH> zeroHfs;
+    set<EH> arcEs, singularArcEs, greenEs;
+    set<VH> nodeVs, singularNodeVs;
+    for (FH p : mcMesh.faces())
+    {
+        bool containsN = contains(mcMesh.face_vertices(p), n);
+        if (!containsN)
+            continue;
+        bool hasZeroLength = false;
+        if (mcMeshProps().isAllocated<ARC_INT_LENGTH>())
+            for (auto kv : halfpatchHalfarcsByDir(mcMesh.halfface_handle(p, 0)))
+            {
+                int length = 0;
+                for (HEH ha : kv.second)
+                    length += mcMeshProps().get<ARC_INT_LENGTH>(mcMesh.edge_handle(ha));
+                if (length == 0)
+                    hasZeroLength = true;
+            }
+        if (hasZeroLength)
+            for (HFH hf : mcMeshProps().ref<PATCH_MESH_HALFFACES>(p))
+                for (HFH hf2 : tetMesh.face_halffaces(tetMesh.face_handle(hf)))
+                    zeroHfs.insert(hf2);
+        else
+            for (HFH hf : mcMeshProps().ref<PATCH_MESH_HALFFACES>(p))
+                for (HFH hf2 : tetMesh.face_halffaces(tetMesh.face_handle(hf)))
+                    patchHfs.insert(hf2);
+
+        for (EH a2 : mcMesh.face_edges(p))
+        {
+            if (mcMeshProps().get<IS_SINGULAR>(a2))
+                for (HEH he : mcMeshProps().ref<ARC_MESH_HALFEDGES>(a2))
+                    singularArcEs.insert(tetMesh.edge_handle(he));
+            else
+                for (HEH he : mcMeshProps().ref<ARC_MESH_HALFEDGES>(a2))
+                    arcEs.insert(tetMesh.edge_handle(he));
+            if (mcMeshProps().isAllocated<ARC_INT_LENGTH>() && mcMeshProps().get<ARC_INT_LENGTH>(a2) == 0)
+            {
+                for (HEH he : mcMeshProps().ref<ARC_MESH_HALFEDGES>(a2))
+                    greenEs.insert(tetMesh.edge_handle(he));
+            }
+        }
+        for (VH n2 : mcMesh.face_vertices(p))
+        {
+            auto type = mcMeshProps().nodeType(n2);
+            if (type.first == SingularNodeType::REGULAR)
+                nodeVs.insert(mcMeshProps().ref<NODE_MESH_VERTEX>(n2));
+            else
+                singularNodeVs.insert(mcMeshProps().ref<NODE_MESH_VERTEX>(n2));
+        }
+    }
+    debugView(zeroHfs,
+              patchHfs,
+              {},
+              {},
+              singularArcEs,
+              greenEs,
+              arcEs,
+              singularNodeVs,
+              {mcMeshProps().get<NODE_MESH_VERTEX>(n)},
+              nodeVs);
+#endif
+}
+
+void MCMeshNavigator::debugViewMC(const CH& b) const
+{
+    (void)b;
+#ifdef MC3D_WITH_VIEWER
+    auto& tetMesh = meshProps().mesh();
+    auto& mcMesh = mcMeshProps().mesh();
+    set<HFH> patchHfs;
+    set<HFH> zeroHfs;
+    for (FH p : mcMesh.cell_faces(b))
+    {
+        bool hasZeroLength = false;
+        if (mcMeshProps().isAllocated<ARC_INT_LENGTH>())
+            for (auto kv : halfpatchHalfarcsByDir(mcMesh.halfface_handle(p, 0)))
+            {
+                int length = 0;
+                for (HEH ha : kv.second)
+                    length += mcMeshProps().get<ARC_INT_LENGTH>(mcMesh.edge_handle(ha));
+                if (length == 0)
+                    hasZeroLength = true;
+            }
+        if (hasZeroLength)
+            for (HFH hf : mcMeshProps().ref<PATCH_MESH_HALFFACES>(p))
+                for (HFH hf2 : tetMesh.face_halffaces(tetMesh.face_handle(hf)))
+                    zeroHfs.insert(hf2);
+        else
+            for (HFH hf : mcMeshProps().ref<PATCH_MESH_HALFFACES>(p))
+                for (HFH hf2 : tetMesh.face_halffaces(tetMesh.face_handle(hf)))
+                    patchHfs.insert(hf2);
+    }
+    set<EH> arcEs, singularArcEs, zeroEs;
+    for (EH a : mcMesh.cell_edges(b))
+    {
+        if (mcMeshProps().get<IS_SINGULAR>(a))
+            for (HEH he : mcMeshProps().ref<ARC_MESH_HALFEDGES>(a))
+                singularArcEs.insert(tetMesh.edge_handle(he));
+        else
+            for (HEH he : mcMeshProps().ref<ARC_MESH_HALFEDGES>(a))
+                arcEs.insert(tetMesh.edge_handle(he));
+        if (mcMeshProps().isAllocated<ARC_INT_LENGTH>() && mcMeshProps().get<ARC_INT_LENGTH>(a) == 0)
+        {
+            for (HEH he : mcMeshProps().ref<ARC_MESH_HALFEDGES>(a))
+                zeroEs.insert(tetMesh.edge_handle(he));
+        }
+    }
+    set<VH> nodeVs, singularNodeVs;
+    for (VH n : mcMesh.cell_vertices(b))
+    {
+        auto type = mcMeshProps().nodeType(n);
+        if (type.first == SingularNodeType::REGULAR)
+            nodeVs.insert(mcMeshProps().ref<NODE_MESH_VERTEX>(n));
+        else
+            singularNodeVs.insert(mcMeshProps().ref<NODE_MESH_VERTEX>(n));
+    }
+    debugView(zeroHfs, patchHfs, {}, {}, singularArcEs, zeroEs, arcEs, singularNodeVs, {}, nodeVs);
+#endif
+}
+
+void MCMeshNavigator::debugViewIGM(const CH& b) const
+{
+    (void)b;
+#ifdef MC3D_WITH_VIEWER
+    auto& tetMesh = meshProps().mesh();
+    auto& mcMesh = mcMeshProps().mesh();
+    set<HFH> patchHfs;
+    for (HFH hp : mcMesh.cell_halffaces(b))
+        for (HFH hf : mcMeshProps().hpHalffaces(hp))
+            patchHfs.insert(hf);
+    set<EH> arcEs;
+    for (EH a : mcMesh.cell_edges(b))
+        for (HEH he : mcMeshProps().ref<ARC_MESH_HALFEDGES>(a))
+            arcEs.insert(tetMesh.edge_handle(he));
+    set<VH> nodeVs;
+    for (VH n : mcMesh.cell_vertices(b))
+        nodeVs.insert(mcMeshProps().ref<NODE_MESH_VERTEX>(n));
+
+    VH nMin = mcMeshProps().ref<BLOCK_CORNER_NODES>(b).at(UVWDir::NEG_U_NEG_V_NEG_W);
+    VH nMax = mcMeshProps().ref<BLOCK_CORNER_NODES>(b).at(UVWDir::POS_U_POS_V_POS_W);
+    Vec3Q minIGM = nodeIGMinBlock(nMin, b);
+    Vec3Q maxIGM = nodeIGMinBlock(nMax, b);
+    Vec3Q midPt = (minIGM + maxIGM) * 0.5;
+
+    TetMesh boundaryMesh;
+    VH midV = boundaryMesh.add_vertex(Vec3Q2d(midPt));
+    set<HFH> boundaryHfs;
+    map<VH, VH> v2v;
+    for (HFH hf : patchHfs)
+    {
+        auto vs = meshProps().get_halfface_vertices(hf);
+        vector<VH> vsNew;
+        for (VH v : vs)
+            if (v2v.count(v) != 0)
+                vsNew.push_back(v2v[v]);
+            else
+            {
+                Vec3Q igm = meshProps().ref<CHART_IGM>(anyIncidentTetOfBlock(v, b)).at(v);
+                vsNew.push_back(v2v[v] = boundaryMesh.add_vertex(Vec3Q2d(igm)));
+            }
+        vsNew.push_back(midV);
+        boundaryMesh.add_cell(vsNew);
+        boundaryHfs.insert(boundaryMesh.find_halfface(vector<VH>(vsNew.begin(), vsNew.begin() + 3)));
+    }
+    volumeshOS::VMesh mesh = volumeshOS::load(&boundaryMesh);
+    mesh.set_cell_rounding(0.0);
+    mesh.use_base_color(false);
+    mesh.set_lighting_mode(volumeshOS::LightingMode::PHONG);
+    mesh.use_two_sided_lighting(true);
+    volumeshOS::use_shadows(false);
+    for (HFH hf : boundaryMesh.halffaces())
+        if (boundaryHfs.count(hf) != 0 || boundaryHfs.count(boundaryMesh.opposite_halfface_handle(hf)) != 0)
+            mesh.set_color(hf, OVM::Vec4d(0.0, 1.0, 0.0, 1.0));
+        else
+            mesh.set_color(hf, OVM::Vec4d(1.0, 1.0, 1.0, 0.0));
+
+    auto rebuildShapes = [&]()
+    {
+        for (EH e : arcEs)
+        {
+            // for (CH tet: meshProps().mesh().edge_cells(e))
+            // {
+            // auto highlight = mesh.add_shape<volumeshOS::VCylinder>(tet);
+            // assert(!meshProps().mesh().is_deleted(tet));
+            auto highlight = mesh.add_shape<volumeshOS::VCylinder>();
+            assert(!meshProps().mesh().is_deleted(e));
+            auto vs = meshProps().mesh().edge_vertices(e);
+            Vec3d dir = Vec3Q2d(meshProps().ref<CHART_IGM>(anyIncidentTetOfBlock(vs[1], b)).at(vs[1])
+                                - meshProps().ref<CHART_IGM>(anyIncidentTetOfBlock(vs[0], b)).at(vs[0]));
+            highlight.set_position(Vec3Q2d(meshProps().ref<CHART_IGM>(anyIncidentTetOfBlock(vs[0], b)).at(vs[0]))
+                                   + 0.5 * dir);
+            highlight.set_color(OVM::Vec4d{1.0, 0.0, 0.0, 1.0});
+            highlight.set_direction(dir.normalized());
+            highlight.set_scale(OVM::Vec3d({0.03f, (float)dir.norm(), 0.03f}));
+            // }
+        }
+
+        for (VH v : nodeVs)
+        {
+            Vec3d pos = Vec3Q2d(meshProps().ref<CHART_IGM>(anyIncidentTetOfBlock(v, b)).at(v));
+            auto highlight = mesh.add_shape<volumeshOS::VSphere>();
+            highlight.set_position(pos);
+            highlight.set_color(OVM::Vec4d{0.0, 0.0, 1.0, 1.0});
+            highlight.set_scale(0.05f);
+        }
+    };
+
+    rebuildShapes();
+    volumeshOS::open();
+#endif
+}
+
+void MCMeshNavigator::debugViewMC(const FH& pIn) const
+{
+    (void)pIn;
+#ifdef MC3D_WITH_VIEWER
+    auto& tetMesh = meshProps().mesh();
+    auto& mcMesh = mcMeshProps().mesh();
+    set<HFH> patchHfs;
+    set<HFH> zeroHfs, blueHfs;
+    set<EH> arcEs, singularArcEs, greenEs;
+    set<VH> nodeVs, singularNodeVs;
+    for (FH p : mcMesh.faces())
+    {
+        bool containsPin = false;
+        for (VH n : mcMesh.face_vertices(pIn))
+            containsPin = containsPin || contains(mcMesh.face_vertices(p), n);
+        if (!containsPin)
+            continue;
+        bool hasZeroLength = false;
+        if (mcMeshProps().isAllocated<ARC_INT_LENGTH>())
+            for (auto kv : halfpatchHalfarcsByDir(mcMesh.halfface_handle(p, 0)))
+            {
+                int length = 0;
+                for (HEH ha : kv.second)
+                    length += mcMeshProps().get<ARC_INT_LENGTH>(mcMesh.edge_handle(ha));
+                if (length == 0)
+                    hasZeroLength = true;
+            }
+        if (hasZeroLength)
+            for (HFH hf : mcMeshProps().ref<PATCH_MESH_HALFFACES>(p))
+                for (HFH hf2 : tetMesh.face_halffaces(tetMesh.face_handle(hf)))
+                    zeroHfs.insert(hf2);
+        else
+            for (HFH hf : mcMeshProps().ref<PATCH_MESH_HALFFACES>(p))
+                for (HFH hf2 : tetMesh.face_halffaces(tetMesh.face_handle(hf)))
+                    patchHfs.insert(hf2);
+        if (p == pIn)
+            for (HFH hf : mcMeshProps().ref<PATCH_MESH_HALFFACES>(p))
+                for (HFH hf2 : tetMesh.face_halffaces(tetMesh.face_handle(hf)))
+                    blueHfs.insert(hf2);
+
+        for (EH a2 : mcMesh.face_edges(p))
+        {
+            if (mcMeshProps().get<IS_SINGULAR>(a2))
+                for (HEH he : mcMeshProps().ref<ARC_MESH_HALFEDGES>(a2))
+                    singularArcEs.insert(tetMesh.edge_handle(he));
+            else
+                for (HEH he : mcMeshProps().ref<ARC_MESH_HALFEDGES>(a2))
+                    arcEs.insert(tetMesh.edge_handle(he));
+            if (mcMeshProps().isAllocated<ARC_INT_LENGTH>() && mcMeshProps().get<ARC_INT_LENGTH>(a2) == 0)
+            {
+                for (HEH he : mcMeshProps().ref<ARC_MESH_HALFEDGES>(a2))
+                    greenEs.insert(tetMesh.edge_handle(he));
+            }
+        }
+        for (VH n : mcMesh.face_vertices(p))
+        {
+            auto type = mcMeshProps().nodeType(n);
+            if (type.first == SingularNodeType::REGULAR)
+                nodeVs.insert(mcMeshProps().ref<NODE_MESH_VERTEX>(n));
+            else
+                singularNodeVs.insert(mcMeshProps().ref<NODE_MESH_VERTEX>(n));
+        }
+    }
+    debugView(zeroHfs, patchHfs, blueHfs, {}, singularArcEs, greenEs, arcEs, singularNodeVs, {}, nodeVs);
 #endif
 }
 
