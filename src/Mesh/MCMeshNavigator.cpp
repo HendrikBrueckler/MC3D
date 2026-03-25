@@ -313,7 +313,9 @@ UVWDir MCMeshNavigator::halfarcDirInBlock(const HEH& ha, const CH& b) const
 map<CH, vector<Transition>>
 MCMeshNavigator::determineTransitionsAroundNode(const VH& n, const CH& bRef, const Transition& transRef, bool onlyfirst) const
 {
-    set<pair<CH, Vec3i>> bAndTrans({{bRef, transRef.rotation}});
+    set<pair<CH, Vec3i>> bAndTrans;
+    if (!onlyfirst)
+        bAndTrans.insert({bRef, transRef.rotation});
     map<CH, vector<Transition>> b2trans;
 
     auto& mcMesh = mcMeshProps().mesh();
@@ -342,7 +344,7 @@ MCMeshNavigator::determineTransitionsAroundNode(const VH& n, const CH& bRef, con
                 continue;
             if (!onlyfirst)
                 bAndTrans.insert({bNext, trans.rotation});
-            b2trans[b2t.first].push_back(b2t.second);
+            b2trans[bNext].push_back(trans);
             bQ.push_back({bNext, trans});
         }
     }
@@ -353,7 +355,9 @@ MCMeshNavigator::determineTransitionsAroundNode(const VH& n, const CH& bRef, con
 map<CH, vector<Transition>>
 MCMeshNavigator::determineTransitionsAroundArc(const EH& a, const CH& bRef, const Transition& transRef, bool onlyfirst) const
 {
-    set<pair<CH, Vec3i>, std::less<pair<CH, Vec3i>>> bAndTrans({{bRef, transRef.rotation}});
+    set<pair<CH, Vec3i>> bAndTrans;
+    if (!onlyfirst)
+        bAndTrans.insert({bRef, transRef.rotation});
     map<CH, vector<Transition>> b2trans;
 
     auto& mcMesh = mcMeshProps().mesh();
@@ -382,7 +386,7 @@ MCMeshNavigator::determineTransitionsAroundArc(const EH& a, const CH& bRef, cons
                 continue;
             if (!onlyfirst)
                 bAndTrans.insert({bNext, trans.rotation});
-            b2trans[b2t.first].push_back(b2t.second);
+            b2trans[bNext].push_back(trans);
             bQ.push_back({bNext, trans});
         }
     }
