@@ -689,14 +689,6 @@ void TetMeshNavigator::visualizeParametrization(double scaling) const
     {
         if (meshProps().isAllocated<MC_BLOCK>())
         {
-            CH b = meshProps().get<MC_BLOCK>(
-                tetMesh.incident_cell(tetMesh.is_boundary(hf) ? tetMesh.opposite_halfface_handle(hf) : hf));
-            bool onFlippedTet = false;
-            for (CH tet : tetMesh.face_cells(tetMesh.face_handle(hf)))
-                if (tet.is_valid() && rationalVolumeUVW(tet) < 0)
-                {
-                    onFlippedTet = true;
-                }
             if (meshProps().isBlockBoundary(tetMesh.face_handle(hf)) && showInnerPatches && !meshProps().mesh().is_boundary(tetMesh.face_handle(hf)))
                 blockmeshes.begin()->second.set_color(hf, color1P);
             else if (meshProps().isBlockBoundary(tetMesh.face_handle(hf))
@@ -792,7 +784,6 @@ void TetMeshNavigator::visualizeParametrization(double scaling) const
                 auto e = edges[i][j].first;
                 if (i <= 2 || (i == 6 && showBlockOutline))
                 {
-                    CH tet = edges[i][j].second;
                     auto highlight
                         = (meshProps().isAllocated<MC_BLOCK>() ? blockmeshes.begin()->second : mesh)
                               .add_shape<volumeshOS::VCylinder>();
@@ -815,7 +806,6 @@ void TetMeshNavigator::visualizeParametrization(double scaling) const
                 }
                 else if (showSings && i >=3 && i <= 5)
                 {
-                    CH tet = edges[i][j].second;
                     auto highlight
                         = (meshProps().isAllocated<MC_BLOCK>() ? blockmeshes.begin()->second : mesh)
                               .add_shape<volumeshOS::VCylinder>();
@@ -859,14 +849,6 @@ void TetMeshNavigator::visualizeParametrization(double scaling) const
                 {
                     if (meshProps().isAllocated<MC_BLOCK>())
                     {
-                        CH b = meshProps().get<MC_BLOCK>(
-                            tetMesh.incident_cell(tetMesh.is_boundary(hf) ? tetMesh.opposite_halfface_handle(hf) : hf));
-                        bool onFlippedTet = false;
-                        for (CH tet : tetMesh.face_cells(tetMesh.face_handle(hf)))
-                            if (tet.is_valid() && rationalVolumeUVW(tet) < 0)
-                            {
-                                onFlippedTet = true;
-                            }
                         if (meshProps().isBlockBoundary(tetMesh.face_handle(hf)) && showInnerPatches && !meshProps().mesh().is_boundary(tetMesh.face_handle(hf)))
                             blockmeshes.begin()->second.set_color(hf, color1P);
                         else if (meshProps().isBlockBoundary(tetMesh.face_handle(hf))
