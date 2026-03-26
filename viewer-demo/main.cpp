@@ -170,7 +170,7 @@ OVM::Vec4f getColor(int id, float alpha)
     }
     auto col = OVM::Vec4f(it->second[0], it->second[1], it->second[2], alpha);
     for (int i = 0; i < 3; i++)
-        col[i] += 0.3*(1-col[i]);
+        col[i] += 0.3 * (1 - col[i]);
     return col;
 }
 
@@ -402,7 +402,8 @@ int main(int argc, char** argv)
             }
             assignedCells.insert(blockCells.begin(), blockCells.end());
         }
-        LOG(INFO) << "BC has " << blocks.size() << " blocks, " << patches.size() << " patches, " << arcs.size() << " arcs and " << nodes.size() << " nodes";
+        LOG(INFO) << "BC has " << blocks.size() << " blocks, " << patches.size() << " patches, " << arcs.size()
+                  << " arcs and " << nodes.size() << " nodes";
 
         auto nodesProp = ovm.request_property<MC_NODE_ID::value_t, MC_NODE_ID::entity_t>(MC_NODE_ID::name() + "0", -1);
         auto arcsProp = ovm.request_property<MC_ARC_ID::value_t, MC_ARC_ID::entity_t>(MC_ARC_ID::name() + "0", -1);
@@ -563,8 +564,8 @@ int main(int argc, char** argv)
                     vmesh2arcScale[mesh.get_id()] = 0.15;
                     vmesh2nodeColor[mesh.get_id()] = Vec4d(0, 0, 0, 1.0);
                     vmesh2arcColor[mesh.get_id()] = Vec4d(0, 0, 0, 1.0);
-                    vmesh2patchColor[mesh.get_id()] = Vec4d(164/255.0, 141/255.0, 252/255.0, 1.0);
-                    vmesh2standardColor[mesh.get_id()] = Vec4d(164/255.0, 141/255.0, 252/255.0, 1.0);
+                    vmesh2patchColor[mesh.get_id()] = Vec4d(164 / 255.0, 141 / 255.0, 252 / 255.0, 1.0);
+                    vmesh2standardColor[mesh.get_id()] = Vec4d(164 / 255.0, 141 / 255.0, 252 / 255.0, 1.0);
                     vmesh2featureColor[mesh.get_id()] = Vec4d(0, 0, 0.55, 1.0);
                     vmesh2singularColorPos[mesh.get_id()] = Vec4d(0.00, 0.00, 0.70, 1.0);
                     vmesh2singularColorNeg[mesh.get_id()] = Vec4d(0.70, 0.00, 0.00, 1.0);
@@ -642,13 +643,11 @@ int main(int argc, char** argv)
                                 mesh.never_discard(cell);
                             }
                     }
-                    else
-                        LOG(INFO) << "Huh...";
                 }
 
-
                 if (ImGui::Button("Smooth"))
-                {                    auto ovmCopy = *mesh.get_ovm();
+                {
+                    auto ovmCopy = *mesh.get_ovm();
                     vector<VH> vs;
                     vs.reserve(ovmCopy.n_logical_vertices());
                     for (VH v : ovmCopy.vertices())
@@ -662,7 +661,6 @@ int main(int argc, char** argv)
                         for (VH v : vs)
                         {
                             bool isBoundary = ovmCopy.is_boundary(v);
-
 
                             Vec3d avgPos(0, 0, 0);
                             int numNeighbors = 0;
@@ -690,7 +688,8 @@ int main(int argc, char** argv)
                                         std::vector<Vec3d> vertices;
                                         for (VH vHF : ovmCopy.halfface_vertices(hf))
                                             vertices.emplace_back(ovmCopy.vertex(vHF));
-                                        Vec3d normal = ((vertices[1] - vertices[0]) % (vertices[2] - vertices[0])) + ((vertices[2] - vertices[0]) % (vertices[3] - vertices[0]));
+                                        Vec3d normal = ((vertices[1] - vertices[0]) % (vertices[2] - vertices[0]))
+                                                       + ((vertices[2] - vertices[0]) % (vertices[3] - vertices[0]));
                                         normal.normalize();
                                         avgNormal += normal;
                                     }
@@ -705,7 +704,8 @@ int main(int argc, char** argv)
                                         std::vector<Vec3d> vertices;
                                         for (VH vHF : ovmCopy.halfface_vertices(hf))
                                             vertices.emplace_back(ovmCopy.vertex(vHF));
-                                        Vec3d normal =  ((vertices[1] - vertices[0]) % (vertices[2] - vertices[0])) + ((vertices[2] - vertices[0]) % (vertices[3] - vertices[0]));
+                                        Vec3d normal = ((vertices[1] - vertices[0]) % (vertices[2] - vertices[0]))
+                                                       + ((vertices[2] - vertices[0]) % (vertices[3] - vertices[0]));
                                         normal.normalize();
                                         if ((avgNormal | normal) < 0.9)
                                         {
@@ -832,8 +832,9 @@ int main(int argc, char** argv)
                                     auto sphere = nodesVis.back();
                                     sphere.set_position(pos);
                                     sphere.set_color(!sing ? vmesh2nodeColor[id]
-                                                           : ((nNeg == 0 || (nPos % 2) == 1) > 0 ? vmesh2singularColorPos[id]
-                                                                             : vmesh2singularColorNeg[id]));
+                                                           : ((nNeg == 0 || (nPos % 2) == 1) > 0
+                                                                  ? vmesh2singularColorPos[id]
+                                                                  : vmesh2singularColorNeg[id]));
                                     sphere.set_scale((sing || featureVprop[v] ? 3.0f : 1.0f)
                                                      * (float)(vmesh2length[id] * vmesh2nodeScale[id]));
                                 }
