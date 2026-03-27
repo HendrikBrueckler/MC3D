@@ -617,17 +617,17 @@ array<vector<pair<pairTT<Vec3d>, CH>>, 7> TetMeshNavigator::getParametricGridEdg
         }
     }
     // else
-        for (EH e : tetMesh.edges())
-        {
-            auto vs = tetMesh.edge_vertices(e);
-            // if (meshProps().get<IS_FEATURE_E>(e))
-            if (tetMesh.is_boundary(e) && meshProps().get<IS_SINGULAR>(e) < 0)
-                edges[3].push_back({{tetMesh.vertex(vs[0]), tetMesh.vertex(vs[1])}, *tetMesh.ec_iter(e)});
-            else if (meshProps().get<IS_SINGULAR>(e) > 0)
-                edges[4].push_back({{tetMesh.vertex(vs[0]), tetMesh.vertex(vs[1])}, *tetMesh.ec_iter(e)});
-            else if (meshProps().get<IS_SINGULAR>(e) < 0)
-                edges[5].push_back({{tetMesh.vertex(vs[0]), tetMesh.vertex(vs[1])}, *tetMesh.ec_iter(e)});
-        }
+    for (EH e : tetMesh.edges())
+    {
+        auto vs = tetMesh.edge_vertices(e);
+        // if (meshProps().get<IS_FEATURE_E>(e))
+        if (tetMesh.is_boundary(e) && meshProps().get<IS_SINGULAR>(e) < 0)
+            edges[3].push_back({{tetMesh.vertex(vs[0]), tetMesh.vertex(vs[1])}, *tetMesh.ec_iter(e)});
+        else if (meshProps().get<IS_SINGULAR>(e) > 0)
+            edges[4].push_back({{tetMesh.vertex(vs[0]), tetMesh.vertex(vs[1])}, *tetMesh.ec_iter(e)});
+        else if (meshProps().get<IS_SINGULAR>(e) < 0)
+            edges[5].push_back({{tetMesh.vertex(vs[0]), tetMesh.vertex(vs[1])}, *tetMesh.ec_iter(e)});
+    }
 
     return edges;
 }
@@ -639,15 +639,15 @@ void TetMeshNavigator::visualizeParametrization(double scaling) const
 #ifdef MC3D_WITH_VIEWER
     auto& tetMesh = meshProps().mesh();
 
-    OVM::Vec4f color0A(46/255.0, 46/255.0, 46/255.0, 1.0);
-    OVM::Vec4f color1A(233/255.0, 233/255.0, 233/255.0, 1.0);
-    OVM::Vec4f color2A(255/255.0, 204/255.0, 0/255.0, 1.0);
-    OVM::Vec4f color3A(255/255.0, 204/255.0, 0/255.0, 1.0);
-    OVM::Vec4f color0P(198/255.0, 205/255.0, 255/255.0, 160.0/255.0);
+    OVM::Vec4f color0A(46 / 255.0, 46 / 255.0, 46 / 255.0, 1.0);
+    OVM::Vec4f color1A(233 / 255.0, 233 / 255.0, 233 / 255.0, 1.0);
+    OVM::Vec4f color2A(255 / 255.0, 204 / 255.0, 0 / 255.0, 1.0);
+    OVM::Vec4f color3A(255 / 255.0, 204 / 255.0, 0 / 255.0, 1.0);
+    OVM::Vec4f color0P(198 / 255.0, 205 / 255.0, 255 / 255.0, 160.0 / 255.0);
     OVM::Vec4f colorHighlight(1.0, 0.3, 0.3, 0.5);
 
     // OVM::Vec4f color0P(0.60392, 0.84314, 0.83529, 0.6);
-    OVM::Vec4f color1P(67/255.0, 67/255.0, 67/255.0, 142.0/255.0);
+    OVM::Vec4f color1P(67 / 255.0, 67 / 255.0, 67 / 255.0, 142.0 / 255.0);
     bool showBlockOutline = false;
     double outlineFactor = 2.0;
     bool showInnerPatches = false;
@@ -672,60 +672,25 @@ void TetMeshNavigator::visualizeParametrization(double scaling) const
     volumeshOS::Internal::AppState::settings.shadow.shadow_strength = 0.163f;
     volumeshOS::Internal::AppState::settings.shadow.penumbra_scale = 15.2f;
 
-    map<CH, volumeshOS::VMesh> blockmeshes;
-    if (meshProps().isAllocated<MC_BLOCK>())
-    {
-        auto& mcMeshProps = *meshProps().get<MC_MESH_PROPS>();
-        auto& mcMesh = mcMeshProps.mesh();
-        for (CH b : mcMesh.cells())
-        {
-            auto meshCopy = tetMesh;
-            blockmeshes[b] = (volumeshOS::load(&meshCopy, ("Block " + std::to_string(b.idx())).c_str()));
-            break;
-        }
-    }
     volumeshOS::VMesh mesh = volumeshOS::load(&tetMesh);
     for (HFH hf : tetMesh.halffaces())
     {
-        if (meshProps().isAllocated<MC_BLOCK>())
-        {
-            if (meshProps().isBlockBoundary(tetMesh.face_handle(hf)) && showInnerPatches && !meshProps().mesh().is_boundary(tetMesh.face_handle(hf)))
-                blockmeshes.begin()->second.set_color(hf, color1P);
-            else if (meshProps().isBlockBoundary(tetMesh.face_handle(hf))
-                     && meshProps().mesh().is_boundary(tetMesh.face_handle(hf)))
-                blockmeshes.begin()->second.set_color(hf, color0P);
-            else
-                blockmeshes.begin()->second.set_color(hf, Vec4f(0.0, 0.0, 0.0, 0.0));
-        }
+        bool onTransHf = meshProps().hfTransition<TRANSITION>(hf) != Transition();
+        if (onTransHf)
+            mesh.set_color(hf, color1P);
+        else if (tetMesh.is_boundary(tetMesh.face_handle(hf)))
+            mesh.set_color(hf, color0P);
         else
-        {
-            bool onTransHf = meshProps().hfTransition<TRANSITION>(hf) != Transition();
-            if (onTransHf)
-                mesh.set_color(hf, color1P);
-            else if (tetMesh.is_boundary(tetMesh.face_handle(hf)))
-                mesh.set_color(hf, color0P);
-            else
-                mesh.set_color(hf, Vec4f(0.0, 0.0, 0.0, 0.0));
-        }
+            mesh.set_color(hf, Vec4f(0.0, 0.0, 0.0, 0.0));
     }
 
     volumeshOS::set_camera_position(30.3, 8.5, 13.4);
     volumeshOS::set_camera_fov(20.0);
 
     mesh.set_cell_rounding(0.0);
-    mesh.use_scale_normalization(blockmeshes.empty());
-    mesh.set_rotation(0.0, 240.0, 0.0);
-    if (!blockmeshes.empty())
-    {
-        mesh.set_scale(0.30);
-        mesh.set_origin(Vec3d(0, 0, 0));
-        mesh.set_position(17.4, -5.0, 6.5);
-    }
-    else
-    {
-        mesh.set_scale(1.0);
-        mesh.set_position(12.1, -3.2, 8.7);
-    }
+    mesh.use_scale_normalization(true);
+    mesh.set_scale(1.0);
+    mesh.set_position(12.1, -3.2, 8.7);
     mesh.set_color(OVM::Vec4f(1.0f, 1.0f, 1.0f, 0.1f));
     mesh.use_base_color(false);
     mesh.set_lighting_mode(volumeshOS::LightingMode::PHONG);
@@ -735,25 +700,6 @@ void TetMeshNavigator::visualizeParametrization(double scaling) const
     mesh.set_specular(0.1f);
     mesh.set_specular_coefficient(8.0f);
     mesh.use_two_sided_lighting(true);
-
-    for (auto& kv : blockmeshes)
-    {
-        kv.second.set_cell_rounding(0.0);
-        kv.second.use_scale_normalization(false);
-        kv.second.set_origin(Vec3d(0, 0, 0));
-        kv.second.set_scale(0.30);
-        kv.second.set_origin(Vec3d(0, 0, 0));
-        kv.second.set_position(17.4, -4.93, 6.5);
-        kv.second.set_rotation(0.0, 240.0, 0.0);
-        kv.second.use_base_color(false);
-        kv.second.set_lighting_mode(volumeshOS::LightingMode::PHONG);
-        kv.second.set_shading_mode(volumeshOS::ShadingMode::FLAT);
-        kv.second.set_ambient(0.66f);
-        kv.second.set_diffuse(0.35f);
-        kv.second.set_specular(0.1f);
-        kv.second.set_specular_coefficient(8.0f);
-        kv.second.use_two_sided_lighting(true);
-    }
 
     Vec3d bboxMin(DBL_MAX, DBL_MAX, DBL_MAX);
     Vec3d bboxMax(-DBL_MAX, -DBL_MAX, -DBL_MAX);
@@ -770,12 +716,8 @@ void TetMeshNavigator::visualizeParametrization(double scaling) const
     }
     Vec3d diagonal = (bboxMax - bboxMin);
     double scalefactor = std::max(diagonal[0], std::max(diagonal[1], diagonal[2])) * 0.01;
-
     double cylinderRadius = scalefactor * 0.2;
-    // double sphereRadius = scalefactor * 0.6;
 
-    // bool hfsred = true, hfsgreen = true, hfsblue = true, esred = true, esgreen = true, esblue = true, vsred = true,
-    //      vsgreen = true, vsblue = true;
     auto rebuildShapes = [&]()
     {
         for (int i = 0; i < 7; i++)
@@ -784,9 +726,7 @@ void TetMeshNavigator::visualizeParametrization(double scaling) const
                 auto e = edges[i][j].first;
                 if (i <= 2 || (i == 6 && showBlockOutline))
                 {
-                    auto highlight
-                        = (meshProps().isAllocated<MC_BLOCK>() ? blockmeshes.begin()->second : mesh)
-                              .add_shape<volumeshOS::VCylinder>();
+                    auto highlight = mesh.add_shape<volumeshOS::VCylinder>();
                     Vec3d dir = e.first - e.second;
                     highlight.set_position(e.second + 0.5 * dir);
                     if (i == 0)
@@ -799,16 +739,14 @@ void TetMeshNavigator::visualizeParametrization(double scaling) const
                         highlight.set_color(color0A);
                     highlight.set_direction(dir.normalized());
                     if (i == 6)
-                        highlight.set_scale(
-                            OVM::Vec3d({outlineFactor * cylinderRadius, 1.01*dir.norm(), outlineFactor * cylinderRadius}));
+                        highlight.set_scale(OVM::Vec3d(
+                            {outlineFactor * cylinderRadius, 1.01 * dir.norm(), outlineFactor * cylinderRadius}));
                     else
-                        highlight.set_scale(OVM::Vec3d({cylinderRadius, 1.01*dir.norm(), cylinderRadius}));
+                        highlight.set_scale(OVM::Vec3d({cylinderRadius, 1.01 * dir.norm(), cylinderRadius}));
                 }
-                else if (showSings && i >=3 && i <= 5)
+                else if (showSings && i >= 3 && i <= 5)
                 {
-                    auto highlight
-                        = (meshProps().isAllocated<MC_BLOCK>() ? blockmeshes.begin()->second : mesh)
-                              .add_shape<volumeshOS::VCylinder>();
+                    auto highlight = mesh.add_shape<volumeshOS::VCylinder>();
                     Vec3d dir = e.first - e.second;
                     highlight.set_position(e.second + 0.5 * dir);
                     if (i == 3)
@@ -818,8 +756,9 @@ void TetMeshNavigator::visualizeParametrization(double scaling) const
                     else if (i == 5)
                         highlight.set_color(color3A);
                     highlight.set_direction(dir.normalized());
-                    highlight.set_scale(
-                        OVM::Vec3d({1.5*outlineFactor * cylinderRadius, 1.03*dir.norm(), 1.5*outlineFactor * cylinderRadius}));
+                    highlight.set_scale(OVM::Vec3d({1.5 * outlineFactor * cylinderRadius,
+                                                    1.03 * dir.norm(),
+                                                    1.5 * outlineFactor * cylinderRadius}));
                 }
             }
     };
@@ -847,26 +786,13 @@ void TetMeshNavigator::visualizeParametrization(double scaling) const
                 rebuildShapes();
                 for (HFH hf : tetMesh.halffaces())
                 {
-                    if (meshProps().isAllocated<MC_BLOCK>())
-                    {
-                        if (meshProps().isBlockBoundary(tetMesh.face_handle(hf)) && showInnerPatches && !meshProps().mesh().is_boundary(tetMesh.face_handle(hf)))
-                            blockmeshes.begin()->second.set_color(hf, color1P);
-                        else if (meshProps().isBlockBoundary(tetMesh.face_handle(hf))
-                                && meshProps().mesh().is_boundary(tetMesh.face_handle(hf)))
-                            blockmeshes.begin()->second.set_color(hf, color0P);
-                        else
-                            blockmeshes.begin()->second.set_color(hf, Vec4f(0.0, 0.0, 0.0, 0.0));
-                    }
+                    bool onTransHf = meshProps().hfTransition<TRANSITION>(hf) != Transition();
+                    if (onTransHf)
+                        mesh.set_color(hf, color1P);
+                    else if (tetMesh.is_boundary(tetMesh.face_handle(hf)))
+                        mesh.set_color(hf, color0P);
                     else
-                    {
-                        bool onTransHf = meshProps().hfTransition<TRANSITION>(hf) != Transition();
-                        if (onTransHf)
-                            mesh.set_color(hf, color1P);
-                        else if (tetMesh.is_boundary(tetMesh.face_handle(hf)))
-                            mesh.set_color(hf, color0P);
-                        else
-                            mesh.set_color(hf, Vec4f(0.0, 0.0, 0.0, 0.0));
-                    }
+                        mesh.set_color(hf, Vec4f(0.0, 0.0, 0.0, 0.0));
                 }
             }
             if (volumeshOS::Internal::ImGuiUtil::begin_menu_with_background("Radii", 11))
@@ -1025,7 +951,8 @@ void TetMeshNavigator::visualizeParameterSpace(double scaling) const
             isCutSurface[f.idx()] = true;
     }
 
-    auto countCutFaces = [&, this] (const EH& e) {
+    auto countCutFaces = [&, this](const EH& e)
+    {
         int nCutFaces = 0;
         for (FH f : tetMesh.edge_faces(e))
             if (isCutSurface[f.idx()])
@@ -1058,7 +985,8 @@ void TetMeshNavigator::visualizeParameterSpace(double scaling) const
                             FH fNext = tetMesh.face_handle(hfNext);
                             if (isCutSurface[fNext.idx()] && !fVisited[fNext.idx()])
                             {
-                                isCutSurfaceFront[fNext.idx()] = ((hfNext.idx() % 2 == 0) == isCutSurfaceFront[fCurr.idx()]);
+                                isCutSurfaceFront[fNext.idx()]
+                                    = ((hfNext.idx() % 2 == 0) == isCutSurfaceFront[fCurr.idx()]);
                                 fVisited[fNext.idx()] = true;
                                 fQ.push_back(fNext);
                             }
@@ -1068,18 +996,20 @@ void TetMeshNavigator::visualizeParameterSpace(double scaling) const
             }
         }
 
-
     TetMesh parameterMesh;
     vector<int> vType(tetMesh.n_vertices(), 0);
     for (VH v : tetMesh.vertices())
     {
-        bool hasCutPatch = containsMatching(tetMesh.vertex_faces(v), [&] (const FH& f) { return isCutSurface[f.idx()]; });
+        bool hasCutPatch
+            = containsMatching(tetMesh.vertex_faces(v), [&](const FH& f) { return isCutSurface[f.idx()]; });
         if (hasCutPatch)
         {
-            bool isJoin = containsMatching(tetMesh.vertex_edges(v), [&] (const EH& e) {
-                int nCutFaces = countCutFaces(e);
-                return !tetMesh.is_boundary(e) && nCutFaces != 0 && nCutFaces != 2;
-            });
+            bool isJoin = containsMatching(tetMesh.vertex_edges(v),
+                                           [&](const EH& e)
+                                           {
+                                               int nCutFaces = countCutFaces(e);
+                                               return !tetMesh.is_boundary(e) && nCutFaces != 0 && nCutFaces != 2;
+                                           });
             if (isJoin)
                 vType[v.idx()] = 1;
             else
@@ -1095,8 +1025,9 @@ void TetMeshNavigator::visualizeParameterSpace(double scaling) const
         HFH hfBack;
         if (vType[v.idx()] == 2)
         {
-            FH fBack = findMatching(tetMesh.vertex_faces(v), [&] (const FH& f) { return isCutSurface[f.idx()]; });
-            hfBack = isCutSurfaceFront[fBack.idx()] ? tetMesh.halfface_handle(fBack, 1) : tetMesh.halfface_handle(fBack, 0);
+            FH fBack = findMatching(tetMesh.vertex_faces(v), [&](const FH& f) { return isCutSurface[f.idx()]; });
+            hfBack = isCutSurfaceFront[fBack.idx()] ? tetMesh.halfface_handle(fBack, 1)
+                                                    : tetMesh.halfface_handle(fBack, 0);
         }
         if (hfBack.is_valid())
         {
@@ -1125,18 +1056,20 @@ void TetMeshNavigator::visualizeParameterSpace(double scaling) const
                 v2frontTets[v].insert(tet);
     }
 
-    Vec3d rand(0,0,0);
+    Vec3d rand(0, 0, 0);
     if (scaling < 1.0)
-        rand = {(double)std::rand() / RAND_MAX, (double)std::rand() / RAND_MAX*1.2, (double)std::rand() / RAND_MAX};
+        rand = {(double)std::rand() / RAND_MAX, (double)std::rand() / RAND_MAX * 1.2, (double)std::rand() / RAND_MAX};
     map<VH, vector<VH>> vOld2vsNew;
     for (VH v : tetMesh.vertices())
     {
-        vOld2vsNew[v].push_back(parameterMesh.add_vertex(Vec3Q2d(meshProps().ref<CHART_T>(*v2frontTets.at(v).begin()).at(v)*scaling-rand)));
+        vOld2vsNew[v].push_back(parameterMesh.add_vertex(
+            Vec3Q2d(meshProps().ref<CHART_T>(*v2frontTets.at(v).begin()).at(v) * scaling - rand)));
         if (v2backTets.count(v))
-            vOld2vsNew[v].push_back(parameterMesh.add_vertex(Vec3Q2d(meshProps().ref<CHART_T>(*v2backTets.at(v).begin()).at(v)*scaling-rand)));
+            vOld2vsNew[v].push_back(parameterMesh.add_vertex(
+                Vec3Q2d(meshProps().ref<CHART_T>(*v2backTets.at(v).begin()).at(v) * scaling - rand)));
     }
     map<EH, vector<EH>> eOld2esNew;
-    for (EH e: tetMesh.edges())
+    for (EH e : tetMesh.edges())
     {
         int nCutFaces = countCutFaces(e);
         bool isInCutSurface = (nCutFaces == 1 && tetMesh.is_boundary(e)) || nCutFaces == 2;
@@ -1158,8 +1091,10 @@ void TetMeshNavigator::visualizeParameterSpace(double scaling) const
         else
         {
             auto vsOld = tetMesh.edge_vertices(e);
-            eOld2esNew[e].push_back(parameterMesh.add_edge(vOld2vsNew.at(vsOld[0]).front(), vOld2vsNew.at(vsOld[1]).front()));
-            eOld2esNew[e].push_back(parameterMesh.add_edge(vOld2vsNew.at(vsOld[0]).back(), vOld2vsNew.at(vsOld[1]).back()));
+            eOld2esNew[e].push_back(
+                parameterMesh.add_edge(vOld2vsNew.at(vsOld[0]).front(), vOld2vsNew.at(vsOld[1]).front()));
+            eOld2esNew[e].push_back(
+                parameterMesh.add_edge(vOld2vsNew.at(vsOld[0]).back(), vOld2vsNew.at(vsOld[1]).back()));
         }
     }
     map<HFH, HFH> hfOld2hfNew;
@@ -1185,8 +1120,10 @@ void TetMeshNavigator::visualizeParameterSpace(double scaling) const
         else
         {
             auto vsOld = tetMesh.get_halfface_vertices(tetMesh.halfface_handle(f, 0));
-            FH fFront = parameterMesh.add_face({vOld2vsNew.at(vsOld[0]).front(), vOld2vsNew.at(vsOld[1]).front(), vOld2vsNew.at(vsOld[2]).front()});
-            FH fBack = parameterMesh.add_face({vOld2vsNew.at(vsOld[0]).back(), vOld2vsNew.at(vsOld[1]).back(), vOld2vsNew.at(vsOld[2]).back()});
+            FH fFront = parameterMesh.add_face(
+                {vOld2vsNew.at(vsOld[0]).front(), vOld2vsNew.at(vsOld[1]).front(), vOld2vsNew.at(vsOld[2]).front()});
+            FH fBack = parameterMesh.add_face(
+                {vOld2vsNew.at(vsOld[0]).back(), vOld2vsNew.at(vsOld[1]).back(), vOld2vsNew.at(vsOld[2]).back()});
             if (isCutSurfaceFront[f.idx()])
             {
                 hfOld2hfNew[tetMesh.halfface_handle(f, 0)] = parameterMesh.halfface_handle(fFront, 0);
@@ -1217,11 +1154,10 @@ void TetMeshNavigator::visualizeParameterSpace(double scaling) const
         tetOld2tetNew[tet] = parameterMesh.add_cell(vsNew);
     }
 
-
-    OVM::Vec4f color0P(198/255.0, 205/255.0, 255/255.0, 160.0/255.0);
+    OVM::Vec4f color0P(198 / 255.0, 205 / 255.0, 255 / 255.0, 160.0 / 255.0);
 
     // OVM::Vec4f color0P(0.60392, 0.84314, 0.83529, 0.6);
-    OVM::Vec4f color1P(255/255.0, 214/255.0, 53/255.0, 160/255.0);
+    OVM::Vec4f color1P(255 / 255.0, 214 / 255.0, 53 / 255.0, 160 / 255.0);
     double outlineFactor = 2.0;
     bool showSings = true;
 
@@ -1258,7 +1194,6 @@ void TetMeshNavigator::visualizeParameterSpace(double scaling) const
     mesh.set_scale(0.75);
     mesh.use_scale_normalization(true);
     mesh.set_position(6.3, -2.4, 1.2);
-    mesh.set_rotation(-90.0f, 0.0f, 0.0f);
     mesh.set_color(OVM::Vec4f(1.0f, 1.0f, 1.0f, 0.1f));
     mesh.use_base_color(false);
     mesh.set_lighting_mode(volumeshOS::LightingMode::PHONG);
@@ -1304,31 +1239,33 @@ void TetMeshNavigator::visualizeParameterSpace(double scaling) const
                     for (VH vtx : parameterMesh.vertices())
                     {
                         Vec3d pos = parameterMesh.vertex(vtx);
-                        closest = std::min((pos - Vec3d(u+0.25, v, w)).norm(), closest);
-                        closest = std::min((pos - Vec3d(u+0.333, v, w)).norm(), closest);
-                        closest = std::min((pos - Vec3d(u+0.5, v, w)).norm(), closest);
-                        closest = std::min((pos - Vec3d(u+0.666, v, w)).norm(), closest);
-                        closest = std::min((pos - Vec3d(u+0.75, v, w)).norm(), closest);
+                        closest = std::min((pos - Vec3d(u + 0.25, v, w)).norm(), closest);
+                        closest = std::min((pos - Vec3d(u + 0.333, v, w)).norm(), closest);
+                        closest = std::min((pos - Vec3d(u + 0.5, v, w)).norm(), closest);
+                        closest = std::min((pos - Vec3d(u + 0.666, v, w)).norm(), closest);
+                        closest = std::min((pos - Vec3d(u + 0.75, v, w)).norm(), closest);
                     }
                     for (EH e : parameterMesh.edges())
                     {
                         auto vs = parameterMesh.edge_vertices(e);
-                        Vec3d pos = 0.5 * (parameterMesh.vertex(vs[0])+ parameterMesh.vertex(vs[1]));
-                        closest = std::min((pos - Vec3d(u+0.25, v, w)).norm(), closest);
-                        closest = std::min((pos - Vec3d(u+0.333, v, w)).norm(), closest);
-                        closest = std::min((pos - Vec3d(u+0.5, v, w)).norm(), closest);
-                        closest = std::min((pos - Vec3d(u+0.666, v, w)).norm(), closest);
-                        closest = std::min((pos - Vec3d(u+0.75, v, w)).norm(), closest);
+                        Vec3d pos = 0.5 * (parameterMesh.vertex(vs[0]) + parameterMesh.vertex(vs[1]));
+                        closest = std::min((pos - Vec3d(u + 0.25, v, w)).norm(), closest);
+                        closest = std::min((pos - Vec3d(u + 0.333, v, w)).norm(), closest);
+                        closest = std::min((pos - Vec3d(u + 0.5, v, w)).norm(), closest);
+                        closest = std::min((pos - Vec3d(u + 0.666, v, w)).norm(), closest);
+                        closest = std::min((pos - Vec3d(u + 0.75, v, w)).norm(), closest);
                     }
                     for (FH f : parameterMesh.faces())
                     {
                         auto vs = parameterMesh.get_halfface_vertices(parameterMesh.halfface_handle(f, 0));
-                        Vec3d pos = 0.333333 * (parameterMesh.vertex(vs[0])+ parameterMesh.vertex(vs[1]) +parameterMesh.vertex(vs[2]));
-                        closest = std::min((pos - Vec3d(u+0.25, v, w)).norm(), closest);
-                        closest = std::min((pos - Vec3d(u+0.333, v, w)).norm(), closest);
-                        closest = std::min((pos - Vec3d(u+0.5, v, w)).norm(), closest);
-                        closest = std::min((pos - Vec3d(u+0.666, v, w)).norm(), closest);
-                        closest = std::min((pos - Vec3d(u+0.75, v, w)).norm(), closest);
+                        Vec3d pos = 0.333333
+                                    * (parameterMesh.vertex(vs[0]) + parameterMesh.vertex(vs[1])
+                                       + parameterMesh.vertex(vs[2]));
+                        closest = std::min((pos - Vec3d(u + 0.25, v, w)).norm(), closest);
+                        closest = std::min((pos - Vec3d(u + 0.333, v, w)).norm(), closest);
+                        closest = std::min((pos - Vec3d(u + 0.5, v, w)).norm(), closest);
+                        closest = std::min((pos - Vec3d(u + 0.666, v, w)).norm(), closest);
+                        closest = std::min((pos - Vec3d(u + 0.75, v, w)).norm(), closest);
                     }
                     if (closest < 0.24)
                         grid[0].push_back({Vec3d(u, v, w), Vec3d(u + 1, v, w)});
@@ -1339,31 +1276,33 @@ void TetMeshNavigator::visualizeParameterSpace(double scaling) const
                     for (VH vtx : parameterMesh.vertices())
                     {
                         Vec3d pos = parameterMesh.vertex(vtx);
-                        closest = std::min((pos - Vec3d(u, v+0.25, w)).norm(), closest);
-                        closest = std::min((pos - Vec3d(u, v+0.333, w)).norm(), closest);
-                        closest = std::min((pos - Vec3d(u, v+0.5, w)).norm(), closest);
-                        closest = std::min((pos - Vec3d(u, v+0.666, w)).norm(), closest);
-                        closest = std::min((pos - Vec3d(u, v+0.75, w)).norm(), closest);
+                        closest = std::min((pos - Vec3d(u, v + 0.25, w)).norm(), closest);
+                        closest = std::min((pos - Vec3d(u, v + 0.333, w)).norm(), closest);
+                        closest = std::min((pos - Vec3d(u, v + 0.5, w)).norm(), closest);
+                        closest = std::min((pos - Vec3d(u, v + 0.666, w)).norm(), closest);
+                        closest = std::min((pos - Vec3d(u, v + 0.75, w)).norm(), closest);
                     }
                     for (EH e : parameterMesh.edges())
                     {
                         auto vs = parameterMesh.edge_vertices(e);
-                        Vec3d pos = 0.5 * (parameterMesh.vertex(vs[0])+ parameterMesh.vertex(vs[1]));
-                        closest = std::min((pos - Vec3d(u, v+0.25, w)).norm(), closest);
-                        closest = std::min((pos - Vec3d(u, v+0.333, w)).norm(), closest);
-                        closest = std::min((pos - Vec3d(u, v+0.5, w)).norm(), closest);
-                        closest = std::min((pos - Vec3d(u, v+0.666, w)).norm(), closest);
-                        closest = std::min((pos - Vec3d(u, v+0.75, w)).norm(), closest);
+                        Vec3d pos = 0.5 * (parameterMesh.vertex(vs[0]) + parameterMesh.vertex(vs[1]));
+                        closest = std::min((pos - Vec3d(u, v + 0.25, w)).norm(), closest);
+                        closest = std::min((pos - Vec3d(u, v + 0.333, w)).norm(), closest);
+                        closest = std::min((pos - Vec3d(u, v + 0.5, w)).norm(), closest);
+                        closest = std::min((pos - Vec3d(u, v + 0.666, w)).norm(), closest);
+                        closest = std::min((pos - Vec3d(u, v + 0.75, w)).norm(), closest);
                     }
                     for (FH f : parameterMesh.faces())
                     {
                         auto vs = parameterMesh.get_halfface_vertices(parameterMesh.halfface_handle(f, 0));
-                        Vec3d pos = 0.333333 * (parameterMesh.vertex(vs[0])+ parameterMesh.vertex(vs[1]) +parameterMesh.vertex(vs[2]));
-                        closest = std::min((pos - Vec3d(u, v+0.25, w)).norm(), closest);
-                        closest = std::min((pos - Vec3d(u, v+0.333, w)).norm(), closest);
-                        closest = std::min((pos - Vec3d(u, v+0.5, w)).norm(), closest);
-                        closest = std::min((pos - Vec3d(u, v+0.666, w)).norm(), closest);
-                        closest = std::min((pos - Vec3d(u, v+0.75, w)).norm(), closest);
+                        Vec3d pos = 0.333333
+                                    * (parameterMesh.vertex(vs[0]) + parameterMesh.vertex(vs[1])
+                                       + parameterMesh.vertex(vs[2]));
+                        closest = std::min((pos - Vec3d(u, v + 0.25, w)).norm(), closest);
+                        closest = std::min((pos - Vec3d(u, v + 0.333, w)).norm(), closest);
+                        closest = std::min((pos - Vec3d(u, v + 0.5, w)).norm(), closest);
+                        closest = std::min((pos - Vec3d(u, v + 0.666, w)).norm(), closest);
+                        closest = std::min((pos - Vec3d(u, v + 0.75, w)).norm(), closest);
                     }
                     if (closest < 0.24)
                         grid[1].push_back({Vec3d(u, v, w), Vec3d(u, v + 1, w)});
@@ -1374,31 +1313,33 @@ void TetMeshNavigator::visualizeParameterSpace(double scaling) const
                     for (VH vtx : parameterMesh.vertices())
                     {
                         Vec3d pos = parameterMesh.vertex(vtx);
-                        closest = std::min((pos - Vec3d(u, v, w+0.25)).norm(), closest);
-                        closest = std::min((pos - Vec3d(u, v, w+0.333)).norm(), closest);
-                        closest = std::min((pos - Vec3d(u, v, w+0.5)).norm(), closest);
-                        closest = std::min((pos - Vec3d(u, v, w+0.666)).norm(), closest);
-                        closest = std::min((pos - Vec3d(u, v, w+0.75)).norm(), closest);
+                        closest = std::min((pos - Vec3d(u, v, w + 0.25)).norm(), closest);
+                        closest = std::min((pos - Vec3d(u, v, w + 0.333)).norm(), closest);
+                        closest = std::min((pos - Vec3d(u, v, w + 0.5)).norm(), closest);
+                        closest = std::min((pos - Vec3d(u, v, w + 0.666)).norm(), closest);
+                        closest = std::min((pos - Vec3d(u, v, w + 0.75)).norm(), closest);
                     }
                     for (EH e : parameterMesh.edges())
                     {
                         auto vs = parameterMesh.edge_vertices(e);
-                        Vec3d pos = 0.5 * (parameterMesh.vertex(vs[0])+ parameterMesh.vertex(vs[1]));
-                        closest = std::min((pos - Vec3d(u, v, w+0.25)).norm(), closest);
-                        closest = std::min((pos - Vec3d(u, v, w+0.333)).norm(), closest);
-                        closest = std::min((pos - Vec3d(u, v, w+0.5)).norm(), closest);
-                        closest = std::min((pos - Vec3d(u, v, w+0.666)).norm(), closest);
-                        closest = std::min((pos - Vec3d(u, v, w+0.75)).norm(), closest);
+                        Vec3d pos = 0.5 * (parameterMesh.vertex(vs[0]) + parameterMesh.vertex(vs[1]));
+                        closest = std::min((pos - Vec3d(u, v, w + 0.25)).norm(), closest);
+                        closest = std::min((pos - Vec3d(u, v, w + 0.333)).norm(), closest);
+                        closest = std::min((pos - Vec3d(u, v, w + 0.5)).norm(), closest);
+                        closest = std::min((pos - Vec3d(u, v, w + 0.666)).norm(), closest);
+                        closest = std::min((pos - Vec3d(u, v, w + 0.75)).norm(), closest);
                     }
                     for (FH f : parameterMesh.faces())
                     {
                         auto vs = parameterMesh.get_halfface_vertices(parameterMesh.halfface_handle(f, 0));
-                        Vec3d pos = 0.333333 * (parameterMesh.vertex(vs[0])+ parameterMesh.vertex(vs[1]) +parameterMesh.vertex(vs[2]));
-                        closest = std::min((pos - Vec3d(u, v, w+0.25)).norm(), closest);
-                        closest = std::min((pos - Vec3d(u, v, w+0.333)).norm(), closest);
-                        closest = std::min((pos - Vec3d(u, v, w+0.5)).norm(), closest);
-                        closest = std::min((pos - Vec3d(u, v, w+0.666)).norm(), closest);
-                        closest = std::min((pos - Vec3d(u, v, w+0.75)).norm(), closest);
+                        Vec3d pos = 0.333333
+                                    * (parameterMesh.vertex(vs[0]) + parameterMesh.vertex(vs[1])
+                                       + parameterMesh.vertex(vs[2]));
+                        closest = std::min((pos - Vec3d(u, v, w + 0.25)).norm(), closest);
+                        closest = std::min((pos - Vec3d(u, v, w + 0.333)).norm(), closest);
+                        closest = std::min((pos - Vec3d(u, v, w + 0.5)).norm(), closest);
+                        closest = std::min((pos - Vec3d(u, v, w + 0.666)).norm(), closest);
+                        closest = std::min((pos - Vec3d(u, v, w + 0.75)).norm(), closest);
                     }
                     if (closest < 0.24)
                         grid[2].push_back({Vec3d(u, v, w), Vec3d(u, v, w + 1)});
@@ -1422,10 +1363,10 @@ void TetMeshNavigator::visualizeParameterSpace(double scaling) const
                     highlight.set_color(OVM::Vec4d{0.0, 0.0, 1.0, 1.0});
                 highlight.set_direction(dir.normalized());
                 if (i == 6)
-                    highlight.set_scale(
-                        OVM::Vec3d({outlineFactor * cylinderRadius, 1.00*dir.norm(), outlineFactor * cylinderRadius}));
+                    highlight.set_scale(OVM::Vec3d(
+                        {outlineFactor * cylinderRadius, 1.00 * dir.norm(), outlineFactor * cylinderRadius}));
                 else
-                    highlight.set_scale(OVM::Vec3d({cylinderRadius, 1.00*dir.norm(), cylinderRadius}));
+                    highlight.set_scale(OVM::Vec3d({cylinderRadius, 1.00 * dir.norm(), cylinderRadius}));
             }
         if (showSings)
         {
@@ -1452,8 +1393,8 @@ void TetMeshNavigator::visualizeParameterSpace(double scaling) const
                     else if (i == 2)
                         highlight.set_color(OVM::Vec4d{0.05, 0.05, 0.05, 1.0});
                     highlight.set_direction(dir.normalized());
-                    highlight.set_scale(
-                        OVM::Vec3d({outlineFactor * cylinderRadius, 1.03*dir.norm(), outlineFactor * cylinderRadius}));
+                    highlight.set_scale(OVM::Vec3d(
+                        {outlineFactor * cylinderRadius, 1.03 * dir.norm(), outlineFactor * cylinderRadius}));
                 }
             }
         }
@@ -1513,9 +1454,7 @@ void TetMeshNavigator::visualizeParameterSpace(double scaling) const
 
     volumeshOS::open();
 #endif
-
 }
-
 
 template void TetMeshNavigator::visualizeParameterSpace<CHART>(double scaling) const;
 template void TetMeshNavigator::visualizeParameterSpace<CHART_IGM>(double scaling) const;

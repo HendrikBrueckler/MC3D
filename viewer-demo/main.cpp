@@ -520,9 +520,9 @@ int main(int argc, char** argv)
             auto mesh = volumeshOS::get_focused_mesh();
             if (mesh.is_valid())
             {
-                if (ImGui::Button("SERIALIZE ROUNDED"))
+                if (ImGui::Button("SERIALIZE MESH WITH ROUNDINGS"))
                 {
-                    volumeshOS::serialize(mesh, "./hex_rounded.ply");
+                    serialize(mesh, "./hex_rounded.ply");
                 }
                 if (ImGui::Button("Compute sizes"))
                 {
@@ -598,7 +598,7 @@ int main(int argc, char** argv)
                                 }
                             }
                         }
-                        LOG(INFO) << "Cells visited " << visitedCells.size() << " total cells " << ovm.n_cells();
+                        DLOG(INFO) << "Cells visited " << visitedCells.size() << " total cells " << ovm.n_cells();
                         for (CH cell : ovm.cells())
                             if (visitedCells.count(cell) == 0)
                             {
@@ -607,7 +607,6 @@ int main(int argc, char** argv)
                     }
                     else if (ovm.face_property_exists<int>("MC3D_IS_FEATURE_F0"))
                     {
-                        LOG(INFO) << "HUH?";
                         auto features = ovm.request_face_property<int>("MC3D_IS_FEATURE_F0");
                         CH startCell = CH(0);
                         for (CH cell : ovm.cells())
@@ -636,7 +635,7 @@ int main(int argc, char** argv)
                                 }
                             }
                         }
-                        LOG(INFO) << "Cells visited " << visitedCells.size() << " total cells " << ovm.n_cells();
+                        DLOG(INFO) << "Cells visited " << visitedCells.size() << " total cells " << ovm.n_cells();
                         for (CH cell : ovm.cells())
                             if (visitedCells.count(cell) == 0)
                             {
@@ -645,8 +644,10 @@ int main(int argc, char** argv)
                     }
                 }
 
+                bool toggle = false;
                 if (ImGui::Button("Smooth"))
                 {
+                    toggle = true;
                     auto ovmCopy = *mesh.get_ovm();
                     vector<VH> vs;
                     vs.reserve(ovmCopy.n_logical_vertices());
@@ -707,7 +708,7 @@ int main(int argc, char** argv)
                                         Vec3d normal = ((vertices[1] - vertices[0]) % (vertices[2] - vertices[0]))
                                                        + ((vertices[2] - vertices[0]) % (vertices[3] - vertices[0]));
                                         normal.normalize();
-                                        if ((avgNormal | normal) < 0.9)
+                                        if ((avgNormal | normal) < 0.9 && (avgNormal | -normal) < 0.95)
                                         {
                                             tooSpread = true;
                                             break;
@@ -726,16 +727,14 @@ int main(int argc, char** argv)
                         }
                     }
 
-                    LOG(INFO) << "OVMcopy has " << ovmCopy.n_logical_vertices();
-
-                    volumeshOS::update(mesh, &ovmCopy);
+                    update(mesh, &ovmCopy);
                 }
 
                 if (ImGui::Button("Compute BC"))
                 {
                     auto& ovm = *mesh.get_ovm();
-                    LOG(INFO) << "New ovm has " << ovm.n_logical_vertices();
                     computeBC(ovm);
+                    toggle = true;
                 }
 
                 if (ImGui::Button("Toggle Normal Elements"))
@@ -743,6 +742,7 @@ int main(int argc, char** argv)
                     auto id = mesh.get_id();
                     auto& show = vmesh2drawNormalElements[id];
                     show = !show;
+                    toggle = true;
                 }
 
                 for (int i = 0; i < 8; i++)
@@ -758,13 +758,19 @@ int main(int argc, char** argv)
                 ImGui::ColorEdit4("Singular color Neg",
                                   vmesh2singularColorNeg[mesh.get_id()].data(),
                                   ImGuiColorEditFlags_NoInputs | ImGuiColorEditFlags_NoLabel);
-                if (ImGui::Button("Toggle Node Viz"))
+                if (ImGui::Button("Toggle Node Viz") || toggle)
                 {
                     auto id = mesh.get_id();
                     auto& nodesVis = vmesh2nodes[id];
                     auto& ovm = *mesh.get_ovm();
-                    if (nodesVis.empty())
+                    if (nodesVis.empty() || toggle)
                     {
+                        if (toggle)
+                        {
+                            for (auto sphere : nodesVis)
+                                remove_shape(sphere);
+                            nodesVis.clear();
+                        }
                         int num = 0;
                         int num2 = 0;
                         int num3 = 0;
@@ -867,13 +873,19 @@ int main(int argc, char** argv)
                             sphere.set_color(color);
                 }
 
-                if (ImGui::Button("Toggle Arc Viz"))
+                if (ImGui::Button("Toggle Arc Viz") || toggle)
                 {
                     auto id = mesh.get_id();
                     auto& arcVis = vmesh2arcs[id];
                     auto& ovm = *mesh.get_ovm();
-                    if (arcVis.empty())
+                    if (arcVis.empty() || toggle)
                     {
+                        if (toggle)
+                        {
+                            for (auto cylinder : arcVis)
+                                remove_shape(cylinder);
+                            arcVis.clear();
+                        }
                         int num = 0;
                         int num2 = 0;
                         int num3 = 0;
@@ -980,12 +992,13 @@ int main(int argc, char** argv)
                         for (auto cylinder : arcVis)
                             cylinder.set_color(color);
                 }
-                if (ImGui::Button("Toggle Patch Viz"))
+                if (ImGui::Button("Toggle Patch Viz") || toggle)
                 {
                     auto id = mesh.get_id();
                     auto& patchVis = vmesh2patches[id];
                     auto& ovm = *mesh.get_ovm();
-                    patchVis = patchVis == 5 ? 0 : patchVis + 1;
+                    if (!toggle)
+                        patchVis = patchVis == 5 ? 0 : patchVis + 1;
                     auto patchColor = vmesh2patchColor[id];
                     auto restColor = vmesh2standardColor[id];
                     int num = 0;
