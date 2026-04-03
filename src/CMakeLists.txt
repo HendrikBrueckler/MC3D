@@ -15,10 +15,10 @@ endif()
 list(APPEND MC3D_LIB_LIST TS3D::TS3D)
 
 if (MC3D_WITH_VIEWER)
-    if (NOT TARGET volumeshOS)
-        add_subdirectory(${PROJECT_SOURCE_DIR}/extern/volumeshos extern/volumeshos EXCLUDE_FROM_ALL)
+    if (NOT TARGET polyhydra::polyhydra)
+        add_subdirectory(${PROJECT_SOURCE_DIR}/extern/polyhydra extern/polyhydra EXCLUDE_FROM_ALL)
     endif()
-    list(APPEND MC3D_LIB_LIST volumeshOS)
+    list(APPEND MC3D_LIB_LIST polyhydra::polyhydra)
     list(APPEND MC3D_COMPILE_DEFINITIONS "MC3D_WITH_VIEWER")
 endif()
 

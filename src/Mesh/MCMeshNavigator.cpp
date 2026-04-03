@@ -2,7 +2,7 @@
 
 #ifdef MC3D_WITH_VIEWER
 #include <util/ImGuiUtil.h>
-#include <volumeshOS.h>
+#include <polyhydra/polyhydra.h>
 #endif
 
 namespace mc3d
@@ -2286,12 +2286,12 @@ void MCMeshNavigator::debugViewIGM(const CH& b) const
         boundaryMesh.add_cell(vsNew);
         boundaryHfs.insert(boundaryMesh.find_halfface(vector<VH>(vsNew.begin(), vsNew.begin() + 3)));
     }
-    volumeshOS::VMesh mesh = volumeshOS::load(&boundaryMesh);
+    polyhydra::VMesh mesh = polyhydra::load(&boundaryMesh);
     mesh.set_cell_rounding(0.0);
     mesh.use_base_color(false);
-    mesh.set_lighting_mode(volumeshOS::LightingMode::PHONG);
+    mesh.set_lighting_mode(polyhydra::LightingMode::PHONG);
     mesh.use_two_sided_lighting(true);
-    volumeshOS::use_shadows(false);
+    polyhydra::use_shadows(false);
     for (HFH hf : boundaryMesh.halffaces())
         if (boundaryHfs.count(hf) != 0 || boundaryHfs.count(boundaryMesh.opposite_halfface_handle(hf)) != 0)
             mesh.set_color(hf, OVM::Vec4d(0.0, 1.0, 0.0, 1.0));
@@ -2304,9 +2304,9 @@ void MCMeshNavigator::debugViewIGM(const CH& b) const
         {
             // for (CH tet: meshProps().mesh().edge_cells(e))
             // {
-            // auto highlight = mesh.add_shape<volumeshOS::VCylinder>(tet);
+            // auto highlight = mesh.add_shape<polyhydra::VCylinder>(tet);
             // assert(!meshProps().mesh().is_deleted(tet));
-            auto highlight = mesh.add_shape<volumeshOS::VCylinder>();
+            auto highlight = mesh.add_shape<polyhydra::VCylinder>();
             assert(!meshProps().mesh().is_deleted(e));
             auto vs = meshProps().mesh().edge_vertices(e);
             Vec3d dir = Vec3Q2d(meshProps().ref<CHART_IGM>(anyIncidentTetOfBlock(vs[1], b)).at(vs[1])
@@ -2322,7 +2322,7 @@ void MCMeshNavigator::debugViewIGM(const CH& b) const
         for (VH v : nodeVs)
         {
             Vec3d pos = Vec3Q2d(meshProps().ref<CHART_IGM>(anyIncidentTetOfBlock(v, b)).at(v));
-            auto highlight = mesh.add_shape<volumeshOS::VSphere>();
+            auto highlight = mesh.add_shape<polyhydra::VSphere>();
             highlight.set_position(pos);
             highlight.set_color(OVM::Vec4d{0.0, 0.0, 1.0, 1.0});
             highlight.set_scale(0.05f);
@@ -2330,7 +2330,7 @@ void MCMeshNavigator::debugViewIGM(const CH& b) const
     };
 
     rebuildShapes();
-    volumeshOS::open();
+    polyhydra::open();
 #endif
 }
 

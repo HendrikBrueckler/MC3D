@@ -3,9 +3,9 @@
 #include "MC3D/Mesh/MCMeshNavigator.hpp"
 
 #ifdef MC3D_WITH_VIEWER
+#include <polyhydra/polyhydra.h>
 #include <settings/AppState.h>
 #include <util/ImGuiUtil.h>
-#include <volumeshOS.h>
 #endif
 
 namespace mc3d
@@ -655,24 +655,24 @@ void TetMeshNavigator::visualizeParametrization(double scaling) const
 
     auto edges = getParametricGridEdges<CHART_T>(scaling);
 
-    volumeshOS::use_transparency(true);
-    volumeshOS::use_shadows(true);
-    volumeshOS::set_shape_lighting_mode(volumeshOS::LightingMode::PHONG);
-    volumeshOS::set_shape_ambient(0.7f);
-    volumeshOS::set_shape_diffuse(0.3f);
-    volumeshOS::set_shape_specular(0.05f);
-    volumeshOS::set_shape_specular_coefficient(8.0f);
-    volumeshOS::set_sky_color(OVM::Vec3f{1.0f, 1.0f, 1.0f});
-    volumeshOS::set_ground_color(OVM::Vec3f{1.0f, 1.0f, 1.0f});
-    volumeshOS::Internal::AppState::settings.light.color = {1.0f, 1.0f, 1.0f};
-    volumeshOS::Internal::AppState::settings.sky.sky_color = {1.0f, 1.0f, 1.0f};
-    volumeshOS::Internal::AppState::settings.sky.fog_density = 0.0f;
-    volumeshOS::Internal::AppState::settings.post_processing.active = false;
-    volumeshOS::Internal::AppState::settings.ground.use_pbr = false;
-    volumeshOS::Internal::AppState::settings.shadow.shadow_strength = 0.163f;
-    volumeshOS::Internal::AppState::settings.shadow.penumbra_scale = 15.2f;
+    polyhydra::use_transparency(true);
+    polyhydra::use_shadows(true);
+    polyhydra::set_shape_lighting_mode(polyhydra::LightingMode::PHONG);
+    polyhydra::set_shape_ambient(0.7f);
+    polyhydra::set_shape_diffuse(0.3f);
+    polyhydra::set_shape_specular(0.05f);
+    polyhydra::set_shape_specular_coefficient(8.0f);
+    polyhydra::set_sky_color(OVM::Vec3f{1.0f, 1.0f, 1.0f});
+    polyhydra::set_ground_color(OVM::Vec3f{1.0f, 1.0f, 1.0f});
+    polyhydra::Internal::AppState::settings.light.color = {1.0f, 1.0f, 1.0f};
+    polyhydra::Internal::AppState::settings.sky.sky_color = {1.0f, 1.0f, 1.0f};
+    polyhydra::Internal::AppState::settings.sky.fog_density = 0.0f;
+    polyhydra::Internal::AppState::settings.post_processing.active = false;
+    polyhydra::Internal::AppState::settings.ground.use_pbr = false;
+    polyhydra::Internal::AppState::settings.shadow.shadow_strength = 0.163f;
+    polyhydra::Internal::AppState::settings.shadow.penumbra_scale = 15.2f;
 
-    volumeshOS::VMesh mesh = volumeshOS::load(&tetMesh);
+    polyhydra::VMesh mesh = polyhydra::load(&tetMesh);
     for (HFH hf : tetMesh.halffaces())
     {
         bool onTransHf = meshProps().hfTransition<TRANSITION>(hf) != Transition();
@@ -684,8 +684,8 @@ void TetMeshNavigator::visualizeParametrization(double scaling) const
             mesh.set_color(hf, Vec4f(0.0, 0.0, 0.0, 0.0));
     }
 
-    volumeshOS::set_camera_position(30.3, 8.5, 13.4);
-    volumeshOS::set_camera_fov(20.0);
+    polyhydra::set_camera_position(30.3, 8.5, 13.4);
+    polyhydra::set_camera_fov(20.0);
 
     mesh.set_cell_rounding(0.0);
     mesh.use_scale_normalization(true);
@@ -693,8 +693,8 @@ void TetMeshNavigator::visualizeParametrization(double scaling) const
     mesh.set_position(12.1, -3.2, 8.7);
     mesh.set_color(OVM::Vec4f(1.0f, 1.0f, 1.0f, 0.1f));
     mesh.use_base_color(false);
-    mesh.set_lighting_mode(volumeshOS::LightingMode::PHONG);
-    mesh.set_shading_mode(volumeshOS::ShadingMode::FLAT);
+    mesh.set_lighting_mode(polyhydra::LightingMode::PHONG);
+    mesh.set_shading_mode(polyhydra::ShadingMode::FLAT);
     mesh.set_ambient(0.7f);
     mesh.set_diffuse(0.3f);
     mesh.set_specular(0.1f);
@@ -726,7 +726,7 @@ void TetMeshNavigator::visualizeParametrization(double scaling) const
                 auto e = edges[i][j].first;
                 if (i <= 2 || (i == 6 && showBlockOutline))
                 {
-                    auto highlight = mesh.add_shape<volumeshOS::VCylinder>();
+                    auto highlight = mesh.add_shape<polyhydra::VCylinder>();
                     Vec3d dir = e.first - e.second;
                     highlight.set_position(e.second + 0.5 * dir);
                     if (i == 0)
@@ -746,7 +746,7 @@ void TetMeshNavigator::visualizeParametrization(double scaling) const
                 }
                 else if (showSings && i >= 3 && i <= 5)
                 {
-                    auto highlight = mesh.add_shape<volumeshOS::VCylinder>();
+                    auto highlight = mesh.add_shape<polyhydra::VCylinder>();
                     Vec3d dir = e.first - e.second;
                     highlight.set_position(e.second + 0.5 * dir);
                     if (i == 3)
@@ -767,7 +767,7 @@ void TetMeshNavigator::visualizeParametrization(double scaling) const
 
     int focusMode = 0;
     int selectionID = -1;
-    volumeshOS::on_gui_render(
+    polyhydra::on_gui_render(
         [&]()
         {
             ImGui::Begin("MyPanel");
@@ -776,13 +776,13 @@ void TetMeshNavigator::visualizeParametrization(double scaling) const
                 rebuild = true;
             if (rebuild)
             {
-                volumeshOS::Internal::AppState::settings.camera.position = {30.3, 8.5, 13.4};
-                volumeshOS::Internal::AppState::settings.camera.mode = volumeshOS::CameraMode::FLY;
-                volumeshOS::Internal::AppState::settings.camera.fov = 20.0;
-                volumeshOS::set_camera_mode(volumeshOS::CameraMode::FLY);
-                volumeshOS::set_camera_position(30.3, 8.5, 13.4);
-                volumeshOS::set_camera_fov(20.0);
-                volumeshOS::remove_shapes();
+                polyhydra::Internal::AppState::settings.camera.position = {30.3, 8.5, 13.4};
+                polyhydra::Internal::AppState::settings.camera.mode = polyhydra::CameraMode::FLY;
+                polyhydra::Internal::AppState::settings.camera.fov = 20.0;
+                polyhydra::set_camera_mode(polyhydra::CameraMode::FLY);
+                polyhydra::set_camera_position(30.3, 8.5, 13.4);
+                polyhydra::set_camera_fov(20.0);
+                polyhydra::remove_shapes();
                 rebuildShapes();
                 for (HFH hf : tetMesh.halffaces())
                 {
@@ -795,79 +795,79 @@ void TetMeshNavigator::visualizeParametrization(double scaling) const
                         mesh.set_color(hf, Vec4f(0.0, 0.0, 0.0, 0.0));
                 }
             }
-            if (volumeshOS::Internal::ImGuiUtil::begin_menu_with_background("Radii", 11))
+            if (polyhydra::Internal::ImGuiUtil::begin_menu_with_background("Radii", 11))
             {
-                volumeshOS::Internal::ImGuiUtil::menu_item_filled(
+                polyhydra::Internal::ImGuiUtil::menu_item_filled(
                     "", [&] { ImGui::ColorEdit4("Color0P", color0P.data(), ImGuiColorEditFlags_NoInputs); });
-                volumeshOS::Internal::ImGuiUtil::menu_item_filled(
+                polyhydra::Internal::ImGuiUtil::menu_item_filled(
                     "", [&] { ImGui::ColorEdit4("Color1P", color1P.data(), ImGuiColorEditFlags_NoInputs); });
-                volumeshOS::Internal::ImGuiUtil::menu_item_filled(
+                polyhydra::Internal::ImGuiUtil::menu_item_filled(
                     "", [&] { ImGui::ColorEdit4("Color0A", color0A.data(), ImGuiColorEditFlags_NoInputs); });
-                volumeshOS::Internal::ImGuiUtil::menu_item_filled(
+                polyhydra::Internal::ImGuiUtil::menu_item_filled(
                     "", [&] { ImGui::ColorEdit4("Color1A", color1A.data(), ImGuiColorEditFlags_NoInputs); });
-                volumeshOS::Internal::ImGuiUtil::menu_item_filled(
+                polyhydra::Internal::ImGuiUtil::menu_item_filled(
                     "", [&] { ImGui::ColorEdit4("Color2A", color2A.data(), ImGuiColorEditFlags_NoInputs); });
-                volumeshOS::Internal::ImGuiUtil::menu_item_filled(
+                polyhydra::Internal::ImGuiUtil::menu_item_filled(
                     "", [&] { ImGui::ColorEdit4("Color3A", color3A.data(), ImGuiColorEditFlags_NoInputs); });
-                volumeshOS::Internal::ImGuiUtil::menu_item_filled(
+                polyhydra::Internal::ImGuiUtil::menu_item_filled(
                     "CylinderRadius", [&] { ImGui::InputDouble("##CylinderRadius", &cylinderRadius); });
 
-                volumeshOS::Internal::ImGuiUtil::menu_item_filled(
+                polyhydra::Internal::ImGuiUtil::menu_item_filled(
                     "OutlineFactor", [&] { ImGui::InputDouble("##OutlineFactor", &outlineFactor); });
 
-                volumeshOS::Internal::ImGuiUtil::menu_item_filled("",
-                                                                  [&]
-                                                                  {
-                                                                      if (ImGui::Button("Toggle outline"))
-                                                                          showBlockOutline = !showBlockOutline;
-                                                                  });
-                volumeshOS::Internal::ImGuiUtil::menu_item_filled("",
-                                                                  [&]
-                                                                  {
-                                                                      if (ImGui::Button("Toggle inner patches"))
-                                                                          showInnerPatches = !showInnerPatches;
-                                                                  });
-                volumeshOS::Internal::ImGuiUtil::menu_item_filled("",
-                                                                  [&]
-                                                                  {
-                                                                      if (ImGui::Button("Toggle singularities"))
-                                                                          showSings = !showSings;
-                                                                  });
-                volumeshOS::Internal::ImGuiUtil::end_menu();
+                polyhydra::Internal::ImGuiUtil::menu_item_filled("",
+                                                                 [&]
+                                                                 {
+                                                                     if (ImGui::Button("Toggle outline"))
+                                                                         showBlockOutline = !showBlockOutline;
+                                                                 });
+                polyhydra::Internal::ImGuiUtil::menu_item_filled("",
+                                                                 [&]
+                                                                 {
+                                                                     if (ImGui::Button("Toggle inner patches"))
+                                                                         showInnerPatches = !showInnerPatches;
+                                                                 });
+                polyhydra::Internal::ImGuiUtil::menu_item_filled("",
+                                                                 [&]
+                                                                 {
+                                                                     if (ImGui::Button("Toggle singularities"))
+                                                                         showSings = !showSings;
+                                                                 });
+                polyhydra::Internal::ImGuiUtil::end_menu();
             }
-            if (volumeshOS::Internal::ImGuiUtil::begin_menu_with_background("Focus", 3))
+            if (polyhydra::Internal::ImGuiUtil::begin_menu_with_background("Focus", 3))
             {
-                volumeshOS::Internal::ImGuiUtil::menu_item_filled("Select by ID",
-                                                                  [&]
-                                                                  {
-                                                                      constexpr const char* selection_modes[] = {
-                                                                          "Off", "Vertices", "Edges", "Faces", "Cells"};
-                                                                      ImGui::Combo("##SelectionMode",
-                                                                                   &focusMode,
-                                                                                   selection_modes,
-                                                                                   IM_ARRAYSIZE(selection_modes),
-                                                                                   IM_ARRAYSIZE(selection_modes));
-                                                                  });
-                volumeshOS::Internal::ImGuiUtil::menu_item_filled(
+                polyhydra::Internal::ImGuiUtil::menu_item_filled("Select by ID",
+                                                                 [&]
+                                                                 {
+                                                                     constexpr const char* selection_modes[] = {
+                                                                         "Off", "Vertices", "Edges", "Faces", "Cells"};
+                                                                     ImGui::Combo("##SelectionMode",
+                                                                                  &focusMode,
+                                                                                  selection_modes,
+                                                                                  IM_ARRAYSIZE(selection_modes),
+                                                                                  IM_ARRAYSIZE(selection_modes));
+                                                                 });
+                polyhydra::Internal::ImGuiUtil::menu_item_filled(
                     "ID", [&] { ImGui::InputInt("##ManualSelectionID", &selectionID); });
-                volumeshOS::Internal::ImGuiUtil::menu_item_filled(
+                polyhydra::Internal::ImGuiUtil::menu_item_filled(
                     "",
                     [&]
                     {
                         if (ImGui::Button("Focus"))
                         {
-                            volumeshOS::set_camera_mode(volumeshOS::CameraMode::ORBIT);
+                            polyhydra::set_camera_mode(polyhydra::CameraMode::ORBIT);
                             Vec3d target;
                             switch (focusMode)
                             {
                             case 0:
-                                volumeshOS::set_camera_mode(volumeshOS::CameraMode::FLY);
+                                polyhydra::set_camera_mode(polyhydra::CameraMode::FLY);
                                 break;
                             case 1:
                                 if (selectionID >= 0 && selectionID <= (int)tetMesh.n_vertices())
                                     target = tetMesh.vertex(VH(selectionID));
                                 else
-                                    volumeshOS::set_camera_mode(volumeshOS::CameraMode::FLY);
+                                    polyhydra::set_camera_mode(polyhydra::CameraMode::FLY);
                                 break;
                             case 2:
                                 if (selectionID >= 0 && selectionID <= (int)tetMesh.n_edges())
@@ -876,7 +876,7 @@ void TetMeshNavigator::visualizeParametrization(double scaling) const
                                     target = 0.5 * tetMesh.vertex(vs[0]) + 0.5 * tetMesh.vertex(vs[1]);
                                 }
                                 else
-                                    volumeshOS::set_camera_mode(volumeshOS::CameraMode::FLY);
+                                    polyhydra::set_camera_mode(polyhydra::CameraMode::FLY);
                                 break;
                             case 3:
                                 if (selectionID >= 0 && selectionID <= (int)tetMesh.n_faces())
@@ -889,7 +889,7 @@ void TetMeshNavigator::visualizeParametrization(double scaling) const
                                     target /= vs.size();
                                 }
                                 else
-                                    volumeshOS::set_camera_mode(volumeshOS::CameraMode::FLY);
+                                    polyhydra::set_camera_mode(polyhydra::CameraMode::FLY);
                                 break;
                             case 4:
                                 if (selectionID >= 0 && selectionID <= (int)tetMesh.n_cells())
@@ -902,21 +902,21 @@ void TetMeshNavigator::visualizeParametrization(double scaling) const
                                     target /= vs.size();
                                 }
                                 else
-                                    volumeshOS::set_camera_mode(volumeshOS::CameraMode::FLY);
+                                    polyhydra::set_camera_mode(polyhydra::CameraMode::FLY);
                                 break;
                             default:
                                 break;
                             }
-                            volumeshOS::set_camera_target(mesh.get_transformed_point(target));
+                            polyhydra::set_camera_target(mesh.get_transformed_point(target));
                         }
                     });
-                volumeshOS::Internal::ImGuiUtil::end_menu();
+                polyhydra::Internal::ImGuiUtil::end_menu();
             }
 
             ImGui::End();
         });
 
-    volumeshOS::open();
+    polyhydra::open();
 #endif
 }
 
@@ -1161,24 +1161,24 @@ void TetMeshNavigator::visualizeParameterSpace(double scaling) const
     double outlineFactor = 2.0;
     bool showSings = true;
 
-    volumeshOS::use_transparency(true);
-    volumeshOS::use_shadows(true);
-    volumeshOS::set_shape_lighting_mode(volumeshOS::LightingMode::PHONG);
-    volumeshOS::set_shape_ambient(0.7f);
-    volumeshOS::set_shape_diffuse(0.3f);
-    volumeshOS::set_shape_specular(0.05f);
-    volumeshOS::set_shape_specular_coefficient(8.0f);
-    volumeshOS::set_sky_color(OVM::Vec3f{1.0f, 1.0f, 1.0f});
-    volumeshOS::set_ground_color(OVM::Vec3f{1.0f, 1.0f, 1.0f});
-    volumeshOS::Internal::AppState::settings.light.color = {1.0f, 1.0f, 1.0f};
-    volumeshOS::Internal::AppState::settings.sky.sky_color = {1.0f, 1.0f, 1.0f};
-    volumeshOS::Internal::AppState::settings.sky.fog_density = 0.0f;
-    volumeshOS::Internal::AppState::settings.post_processing.active = false;
-    volumeshOS::Internal::AppState::settings.ground.use_pbr = false;
-    volumeshOS::Internal::AppState::settings.shadow.shadow_strength = 0.176f;
-    volumeshOS::Internal::AppState::settings.shadow.penumbra_scale = 15.2f;
+    polyhydra::use_transparency(true);
+    polyhydra::use_shadows(true);
+    polyhydra::set_shape_lighting_mode(polyhydra::LightingMode::PHONG);
+    polyhydra::set_shape_ambient(0.7f);
+    polyhydra::set_shape_diffuse(0.3f);
+    polyhydra::set_shape_specular(0.05f);
+    polyhydra::set_shape_specular_coefficient(8.0f);
+    polyhydra::set_sky_color(OVM::Vec3f{1.0f, 1.0f, 1.0f});
+    polyhydra::set_ground_color(OVM::Vec3f{1.0f, 1.0f, 1.0f});
+    polyhydra::Internal::AppState::settings.light.color = {1.0f, 1.0f, 1.0f};
+    polyhydra::Internal::AppState::settings.sky.sky_color = {1.0f, 1.0f, 1.0f};
+    polyhydra::Internal::AppState::settings.sky.fog_density = 0.0f;
+    polyhydra::Internal::AppState::settings.post_processing.active = false;
+    polyhydra::Internal::AppState::settings.ground.use_pbr = false;
+    polyhydra::Internal::AppState::settings.shadow.shadow_strength = 0.176f;
+    polyhydra::Internal::AppState::settings.shadow.penumbra_scale = 15.2f;
 
-    volumeshOS::VMesh mesh = volumeshOS::load(&parameterMesh);
+    polyhydra::VMesh mesh = polyhydra::load(&parameterMesh);
     for (HFH hf : parameterMesh.halffaces())
         if (parameterMesh.is_boundary(parameterMesh.face_handle(hf)))
             mesh.set_color(hf, color1P);
@@ -1196,8 +1196,8 @@ void TetMeshNavigator::visualizeParameterSpace(double scaling) const
     mesh.set_position(6.3, -2.4, 1.2);
     mesh.set_color(OVM::Vec4f(1.0f, 1.0f, 1.0f, 0.1f));
     mesh.use_base_color(false);
-    mesh.set_lighting_mode(volumeshOS::LightingMode::PHONG);
-    mesh.set_shading_mode(volumeshOS::ShadingMode::FLAT);
+    mesh.set_lighting_mode(polyhydra::LightingMode::PHONG);
+    mesh.set_shading_mode(polyhydra::ShadingMode::FLAT);
     mesh.set_ambient(0.7f);
     mesh.set_diffuse(0.3f);
     mesh.set_specular(0.3f);
@@ -1352,7 +1352,7 @@ void TetMeshNavigator::visualizeParameterSpace(double scaling) const
             for (int j = 0; j < (int)grid[i].size(); j++)
             {
                 auto e = grid[i][j];
-                auto highlight = mesh.add_shape<volumeshOS::VCylinder>();
+                auto highlight = mesh.add_shape<polyhydra::VCylinder>();
                 Vec3d dir = e.first - e.second;
                 highlight.set_position(e.second + 0.5 * dir);
                 if (i == 2)
@@ -1385,7 +1385,7 @@ void TetMeshNavigator::visualizeParameterSpace(double scaling) const
                     Vec3d front = parameterMesh.vertex(vs[0]);
                     Vec3d back = parameterMesh.vertex(vs[1]);
 
-                    auto highlight = mesh.add_shape<volumeshOS::VCylinder>();
+                    auto highlight = mesh.add_shape<polyhydra::VCylinder>();
                     Vec3d dir = front - back;
                     highlight.set_position(back + 0.5 * dir);
                     if (i == 1)
@@ -1402,7 +1402,7 @@ void TetMeshNavigator::visualizeParameterSpace(double scaling) const
 
     rebuildShapes();
 
-    volumeshOS::on_gui_render(
+    polyhydra::on_gui_render(
         [&]()
         {
             ImGui::Begin("MyPanel");
@@ -1411,13 +1411,13 @@ void TetMeshNavigator::visualizeParameterSpace(double scaling) const
                 rebuild = true;
             if (rebuild)
             {
-                volumeshOS::Internal::AppState::settings.camera.position = {30.3, 8.5, 13.4};
-                volumeshOS::Internal::AppState::settings.camera.mode = volumeshOS::CameraMode::FLY;
-                volumeshOS::Internal::AppState::settings.camera.fov = 20.0;
-                volumeshOS::set_camera_mode(volumeshOS::CameraMode::FLY);
-                volumeshOS::set_camera_position(30.3, 8.5, 13.4);
-                volumeshOS::set_camera_fov(20.0);
-                volumeshOS::remove_shapes();
+                polyhydra::Internal::AppState::settings.camera.position = {30.3, 8.5, 13.4};
+                polyhydra::Internal::AppState::settings.camera.mode = polyhydra::CameraMode::FLY;
+                polyhydra::Internal::AppState::settings.camera.fov = 20.0;
+                polyhydra::set_camera_mode(polyhydra::CameraMode::FLY);
+                polyhydra::set_camera_position(30.3, 8.5, 13.4);
+                polyhydra::set_camera_fov(20.0);
+                polyhydra::remove_shapes();
                 rebuildShapes();
                 for (HFH hf : parameterMesh.halffaces())
                     if (parameterMesh.is_boundary(parameterMesh.face_handle(hf)))
@@ -1430,29 +1430,29 @@ void TetMeshNavigator::visualizeParameterSpace(double scaling) const
                         mesh.set_color(hfOld2hfNew[hf], color0P);
                 }
             }
-            if (volumeshOS::Internal::ImGuiUtil::begin_menu_with_background("Radii", 5))
+            if (polyhydra::Internal::ImGuiUtil::begin_menu_with_background("Radii", 5))
             {
-                volumeshOS::Internal::ImGuiUtil::menu_item_filled(
+                polyhydra::Internal::ImGuiUtil::menu_item_filled(
                     "", [&] { ImGui::ColorEdit4("Color0P", color0P.data(), ImGuiColorEditFlags_NoInputs); });
-                volumeshOS::Internal::ImGuiUtil::menu_item_filled(
+                polyhydra::Internal::ImGuiUtil::menu_item_filled(
                     "", [&] { ImGui::ColorEdit4("Color1P", color1P.data(), ImGuiColorEditFlags_NoInputs); });
-                volumeshOS::Internal::ImGuiUtil::menu_item_filled(
+                polyhydra::Internal::ImGuiUtil::menu_item_filled(
                     "CylinderRadius", [&] { ImGui::InputDouble("##CylinderRadius", &cylinderRadius); });
-                volumeshOS::Internal::ImGuiUtil::menu_item_filled(
+                polyhydra::Internal::ImGuiUtil::menu_item_filled(
                     "OutlineFactor", [&] { ImGui::InputDouble("##OutlineFactor", &outlineFactor); });
 
-                volumeshOS::Internal::ImGuiUtil::menu_item_filled("",
-                                                                  [&]
-                                                                  {
-                                                                      if (ImGui::Button("Toggle singularities"))
-                                                                          showSings = !showSings;
-                                                                  });
-                volumeshOS::Internal::ImGuiUtil::end_menu();
+                polyhydra::Internal::ImGuiUtil::menu_item_filled("",
+                                                                 [&]
+                                                                 {
+                                                                     if (ImGui::Button("Toggle singularities"))
+                                                                         showSings = !showSings;
+                                                                 });
+                polyhydra::Internal::ImGuiUtil::end_menu();
             }
             ImGui::End();
         });
 
-    volumeshOS::open();
+    polyhydra::open();
 #endif
 }
 
@@ -1485,12 +1485,12 @@ void TetMeshNavigator::debugView(const set<HFH>& markFacesRed,
     LOG(WARNING) << "Can not debug view, compiled without viewer";
 #else
     auto& tetMesh = meshProps().mesh();
-    volumeshOS::VMesh mesh = volumeshOS::load(&meshProps().mesh());
+    polyhydra::VMesh mesh = polyhydra::load(&meshProps().mesh());
     mesh.set_cell_rounding(0.0);
     mesh.use_base_color(false);
-    mesh.set_lighting_mode(volumeshOS::LightingMode::PHONG);
+    mesh.set_lighting_mode(polyhydra::LightingMode::PHONG);
     mesh.use_two_sided_lighting(true);
-    volumeshOS::use_shadows(false);
+    polyhydra::use_shadows(false);
     for (HFH hf : markFacesRed)
         mesh.set_color(hf, OVM::Vec4d(1.0, 0.0, 0.0, 1.0));
     for (HFH hf : markFacesGreen)
@@ -1550,7 +1550,7 @@ void TetMeshNavigator::debugView(const set<HFH>& markFacesRed,
                 for (HEH he : mcMeshProps.ref<ARC_MESH_HALFEDGES>(EH(aSelect)))
                 {
                     EH e = tetMesh.edge_handle(he);
-                    auto highlight = mesh.add_shape<volumeshOS::VCylinder>();
+                    auto highlight = mesh.add_shape<polyhydra::VCylinder>();
                     assert(!meshProps().mesh().is_deleted(e));
                     auto vs = meshProps().mesh().edge_vertices(e);
                     Vec3d dir = meshProps().mesh().vertex(vs[1]) - meshProps().mesh().vertex(vs[0]);
@@ -1568,7 +1568,7 @@ void TetMeshNavigator::debugView(const set<HFH>& markFacesRed,
                 VH v = mcMeshProps.get<NODE_MESH_VERTEX>(VH(nSelect));
                 LOG(INFO) << "Selected node " << nSelect << " vtx " << v;
                 Vec3d pos = meshProps().mesh().vertex(v);
-                auto highlight = mesh.add_shape<volumeshOS::VSphere>();
+                auto highlight = mesh.add_shape<polyhydra::VSphere>();
                 highlight.set_color(OVM::Vec4d{1.0, 0.0, 1.0, 1.0});
                 highlight.set_position(pos);
                 highlight.set_scale(3 * (float)sphereRadius);
@@ -1587,9 +1587,9 @@ void TetMeshNavigator::debugView(const set<HFH>& markFacesRed,
             {
                 // for (CH tet: meshProps().mesh().edge_cells(e))
                 // {
-                // auto highlight = mesh.add_shape<volumeshOS::VCylinder>(tet);
+                // auto highlight = mesh.add_shape<polyhydra::VCylinder>(tet);
                 // assert(!meshProps().mesh().is_deleted(tet));
-                auto highlight = mesh.add_shape<volumeshOS::VCylinder>();
+                auto highlight = mesh.add_shape<polyhydra::VCylinder>();
                 assert(!meshProps().mesh().is_deleted(e));
                 auto vs = meshProps().mesh().edge_vertices(e);
                 Vec3d dir = meshProps().mesh().vertex(vs[1]) - meshProps().mesh().vertex(vs[0]);
@@ -1617,7 +1617,7 @@ void TetMeshNavigator::debugView(const set<HFH>& markFacesRed,
             for (VH v : *collPtr)
             {
                 Vec3d pos = meshProps().mesh().vertex(v);
-                auto highlight = mesh.add_shape<volumeshOS::VSphere>();
+                auto highlight = mesh.add_shape<polyhydra::VSphere>();
                 highlight.set_position(pos);
                 if (collPtr == &markVerticesRed)
                     highlight.set_color(OVM::Vec4d{1.0, 0.0, 0.0, 1.0});
@@ -1633,22 +1633,22 @@ void TetMeshNavigator::debugView(const set<HFH>& markFacesRed,
 
     rebuildShapes();
 
-    volumeshOS::on_edge_select(
-        [&](const volumeshOS::VMesh, OVM::EH eSelected)
+    polyhydra::on_edge_select(
+        [&](const polyhydra::VMesh, OVM::EH eSelected)
         {
             LOG(INFO) << "edge " << eSelected << " selected";
             if (meshProps().isAllocated<MC_ARC>())
                 LOG(INFO) << "belongs to arc " << meshProps().get<MC_ARC>(eSelected);
         });
-    volumeshOS::on_vertex_select(
-        [&](const volumeshOS::VMesh, OVM::VH vSelected)
+    polyhydra::on_vertex_select(
+        [&](const polyhydra::VMesh, OVM::VH vSelected)
         {
             LOG(INFO) << "vtx " << vSelected << " selected";
             if (meshProps().isAllocated<MC_NODE>())
                 LOG(INFO) << "belongs to node " << meshProps().get<MC_NODE>(vSelected);
         });
-    volumeshOS::on_face_select(
-        [&](const volumeshOS::VMesh, OVM::FH fSelected)
+    polyhydra::on_face_select(
+        [&](const polyhydra::VMesh, OVM::FH fSelected)
         {
             LOG(INFO) << "face " << fSelected << " selected";
             if (meshProps().isAllocated<MC_PATCH>())
@@ -1659,7 +1659,7 @@ void TetMeshNavigator::debugView(const set<HFH>& markFacesRed,
     int focusMode = 0;
     int focusModeMC = 0;
     int selectionID = -1;
-    volumeshOS::on_gui_render(
+    polyhydra::on_gui_render(
         [&]()
         {
             ImGui::Begin("MyPanel");
@@ -1726,50 +1726,50 @@ void TetMeshNavigator::debugView(const set<HFH>& markFacesRed,
             }
             if (rebuild)
             {
-                volumeshOS::remove_shapes();
+                polyhydra::remove_shapes();
                 rebuildShapes();
             }
-            if (volumeshOS::Internal::ImGuiUtil::begin_menu_with_background("Radii", 2))
+            if (polyhydra::Internal::ImGuiUtil::begin_menu_with_background("Radii", 2))
             {
-                volumeshOS::Internal::ImGuiUtil::menu_item_filled(
+                polyhydra::Internal::ImGuiUtil::menu_item_filled(
                     "CylinderRadius", [&] { ImGui::InputDouble("##CylinderRadius", &cylinderRadius); });
-                volumeshOS::Internal::ImGuiUtil::menu_item_filled(
+                polyhydra::Internal::ImGuiUtil::menu_item_filled(
                     "SphereRadius", [&] { ImGui::InputDouble("##SphereRadius", &sphereRadius); });
-                volumeshOS::Internal::ImGuiUtil::end_menu();
+                polyhydra::Internal::ImGuiUtil::end_menu();
             }
-            if (volumeshOS::Internal::ImGuiUtil::begin_menu_with_background("Focus", 3))
+            if (polyhydra::Internal::ImGuiUtil::begin_menu_with_background("Focus", 3))
             {
-                volumeshOS::Internal::ImGuiUtil::menu_item_filled("Select by ID",
-                                                                  [&]
-                                                                  {
-                                                                      constexpr const char* selection_modes[] = {
-                                                                          "Off", "Vertices", "Edges", "Faces", "Cells"};
-                                                                      ImGui::Combo("##SelectionMode",
-                                                                                   &focusMode,
-                                                                                   selection_modes,
-                                                                                   IM_ARRAYSIZE(selection_modes),
-                                                                                   IM_ARRAYSIZE(selection_modes));
-                                                                  });
-                volumeshOS::Internal::ImGuiUtil::menu_item_filled(
+                polyhydra::Internal::ImGuiUtil::menu_item_filled("Select by ID",
+                                                                 [&]
+                                                                 {
+                                                                     constexpr const char* selection_modes[] = {
+                                                                         "Off", "Vertices", "Edges", "Faces", "Cells"};
+                                                                     ImGui::Combo("##SelectionMode",
+                                                                                  &focusMode,
+                                                                                  selection_modes,
+                                                                                  IM_ARRAYSIZE(selection_modes),
+                                                                                  IM_ARRAYSIZE(selection_modes));
+                                                                 });
+                polyhydra::Internal::ImGuiUtil::menu_item_filled(
                     "ID", [&] { ImGui::InputInt("##ManualSelectionID", &selectionID); });
-                volumeshOS::Internal::ImGuiUtil::menu_item_filled(
+                polyhydra::Internal::ImGuiUtil::menu_item_filled(
                     "",
                     [&]
                     {
                         if (ImGui::Button("Focus"))
                         {
-                            volumeshOS::set_camera_mode(volumeshOS::CameraMode::ORBIT);
+                            polyhydra::set_camera_mode(polyhydra::CameraMode::ORBIT);
                             Vec3d target;
                             switch (focusMode)
                             {
                             case 0:
-                                volumeshOS::set_camera_mode(volumeshOS::CameraMode::FLY);
+                                polyhydra::set_camera_mode(polyhydra::CameraMode::FLY);
                                 break;
                             case 1:
                                 if (selectionID >= 0 && selectionID <= (int)meshProps().mesh().n_vertices())
                                     target = meshProps().mesh().vertex(VH(selectionID));
                                 else
-                                    volumeshOS::set_camera_mode(volumeshOS::CameraMode::FLY);
+                                    polyhydra::set_camera_mode(polyhydra::CameraMode::FLY);
                                 break;
                             case 2:
                                 if (selectionID >= 0 && selectionID <= (int)meshProps().mesh().n_edges())
@@ -1779,7 +1779,7 @@ void TetMeshNavigator::debugView(const set<HFH>& markFacesRed,
                                              + 0.5 * meshProps().mesh().vertex(vs[1]);
                                 }
                                 else
-                                    volumeshOS::set_camera_mode(volumeshOS::CameraMode::FLY);
+                                    polyhydra::set_camera_mode(polyhydra::CameraMode::FLY);
                                 break;
                             case 3:
                                 if (selectionID >= 0 && selectionID <= (int)meshProps().mesh().n_faces())
@@ -1792,7 +1792,7 @@ void TetMeshNavigator::debugView(const set<HFH>& markFacesRed,
                                     target /= vs.size();
                                 }
                                 else
-                                    volumeshOS::set_camera_mode(volumeshOS::CameraMode::FLY);
+                                    polyhydra::set_camera_mode(polyhydra::CameraMode::FLY);
                                 break;
                             case 4:
                                 if (selectionID >= 0 && selectionID <= (int)meshProps().mesh().n_cells())
@@ -1805,30 +1805,30 @@ void TetMeshNavigator::debugView(const set<HFH>& markFacesRed,
                                     target /= vs.size();
                                 }
                                 else
-                                    volumeshOS::set_camera_mode(volumeshOS::CameraMode::FLY);
+                                    polyhydra::set_camera_mode(polyhydra::CameraMode::FLY);
                                 break;
                             default:
                                 break;
                             }
-                            volumeshOS::set_camera_target(mesh.get_transformed_point(target));
+                            polyhydra::set_camera_target(mesh.get_transformed_point(target));
                         }
                     });
-                volumeshOS::Internal::ImGuiUtil::end_menu();
+                polyhydra::Internal::ImGuiUtil::end_menu();
             }
-            if (volumeshOS::Internal::ImGuiUtil::begin_menu_with_background("Focus MC", 3))
+            if (polyhydra::Internal::ImGuiUtil::begin_menu_with_background("Focus MC", 3))
             {
-                volumeshOS::Internal::ImGuiUtil::menu_item_filled("Select by ID",
-                                                                  [&]
-                                                                  {
-                                                                      constexpr const char* selection_modes[] = {
-                                                                          "Off", "Nodes", "Arcs", "Patches", "Blocks"};
-                                                                      ImGui::Combo("##SelectionMode",
-                                                                                   &focusModeMC,
-                                                                                   selection_modes,
-                                                                                   IM_ARRAYSIZE(selection_modes),
-                                                                                   IM_ARRAYSIZE(selection_modes));
-                                                                  });
-                volumeshOS::Internal::ImGuiUtil::menu_item_filled(
+                polyhydra::Internal::ImGuiUtil::menu_item_filled("Select by ID",
+                                                                 [&]
+                                                                 {
+                                                                     constexpr const char* selection_modes[] = {
+                                                                         "Off", "Nodes", "Arcs", "Patches", "Blocks"};
+                                                                     ImGui::Combo("##SelectionMode",
+                                                                                  &focusModeMC,
+                                                                                  selection_modes,
+                                                                                  IM_ARRAYSIZE(selection_modes),
+                                                                                  IM_ARRAYSIZE(selection_modes));
+                                                                 });
+                polyhydra::Internal::ImGuiUtil::menu_item_filled(
                     "ID",
                     [&]
                     {
@@ -1838,7 +1838,7 @@ void TetMeshNavigator::debugView(const set<HFH>& markFacesRed,
                                  ? &nSelect
                                  : (focusModeMC == 2 ? &aSelect : (focusModeMC == 3 ? &pSelect : &bSelect))));
                     });
-                volumeshOS::Internal::ImGuiUtil::menu_item_filled(
+                polyhydra::Internal::ImGuiUtil::menu_item_filled(
                     "",
                     [&]
                     {
@@ -1887,18 +1887,18 @@ void TetMeshNavigator::debugView(const set<HFH>& markFacesRed,
                             }
                             else
                             {
-                                volumeshOS::remove_shapes();
+                                polyhydra::remove_shapes();
                                 rebuildShapes();
                             }
                         }
                     });
-                volumeshOS::Internal::ImGuiUtil::end_menu();
+                polyhydra::Internal::ImGuiUtil::end_menu();
             }
 
             ImGui::End();
         });
 
-    volumeshOS::open();
+    polyhydra::open();
 #endif
 }
 

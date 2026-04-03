@@ -10,14 +10,14 @@
 #include <OpenVolumeMesh/FileManager/FileManager.hh>
 
 #include <settings/AppState.h>
-#include <volumeshOS.h>
+#include <polyhydra/polyhydra.h>
 
 #include <iomanip>
 
 #include <string>
 
 using namespace mc3d;
-using namespace volumeshOS;
+using namespace polyhydra;
 
 static int colors[]
     // = {0x000000, replace black by random other color
@@ -194,7 +194,7 @@ int main(int argc, char** argv)
     map<int, float> vmesh2boundaryOpacity;
     map<int, bool> vmesh2drawNormalElements;
 
-    set_theme(volumeshOS::Theme::Dark);
+    set_theme(Theme::Dark);
 
     vector<std::string> filenames;
     for (int i = 1; i < argc; i++)
@@ -442,32 +442,32 @@ int main(int argc, char** argv)
         }
     };
 
-    volumeshOS::use_transparency(false);
-    volumeshOS::use_ambient_occlusion(true);
-    volumeshOS::use_shadows(false);
-    volumeshOS::set_shape_lighting_mode(volumeshOS::LightingMode::PHONG);
-    volumeshOS::set_shape_ambient(0.75f);
-    volumeshOS::set_shape_diffuse(0.25f);
-    volumeshOS::set_shape_specular(0.3f);
-    volumeshOS::set_shape_specular_coefficient(8.0f);
-    volumeshOS::set_sky_color(OVM::Vec3f{1.0f, 1.0f, 1.0f});
-    volumeshOS::set_ground_color(OVM::Vec3f{1.0f, 1.0f, 1.0f});
-    volumeshOS::Internal::AppState::settings.light.color = {1.0f, 1.0f, 1.0f};
-    volumeshOS::Internal::AppState::settings.light.direction = {1.0f, 1.0f, 1.0f};
-    volumeshOS::Internal::AppState::settings.sky.sky_color = {1.0f, 1.0f, 1.0f};
-    volumeshOS::Internal::AppState::settings.sky.fog_density = 0.0f;
-    volumeshOS::Internal::AppState::settings.camera.position = {3.8, 7.5, 20.0};
-    volumeshOS::Internal::AppState::settings.ssao_mode = volumeshOS::SSAOMode::CUSTOM;
-    volumeshOS::Internal::AppState::settings.ssao_custom.sample_radius = 1.5;
-    volumeshOS::Internal::AppState::settings.post_processing.active = true;
-    volumeshOS::Internal::AppState::settings.post_processing.active = true;
-    volumeshOS::Internal::AppState::settings.post_processing.active = true;
-    volumeshOS::Internal::AppState::settings.post_processing.gamma = 1.0;
-    volumeshOS::Internal::AppState::settings.post_processing.saturation = 1.1;
-    volumeshOS::Internal::AppState::settings.post_processing.contrast = 1.2;
-    volumeshOS::Internal::AppState::settings.ground.use_pbr = false;
-    volumeshOS::Internal::AppState::settings.shadow.shadow_strength = 0.475f;
-    volumeshOS::Internal::AppState::settings.shadow.penumbra_scale = 32.5f;
+    use_transparency(false);
+    use_ambient_occlusion(true);
+    use_shadows(false);
+    set_shape_lighting_mode(LightingMode::PHONG);
+    set_shape_ambient(0.75f);
+    set_shape_diffuse(0.25f);
+    set_shape_specular(0.3f);
+    set_shape_specular_coefficient(8.0f);
+    set_sky_color(OVM::Vec3f{1.0f, 1.0f, 1.0f});
+    set_ground_color(OVM::Vec3f{1.0f, 1.0f, 1.0f});
+    Internal::AppState::settings.light.color = {1.0f, 1.0f, 1.0f};
+    Internal::AppState::settings.light.direction = {1.0f, 1.0f, 1.0f};
+    Internal::AppState::settings.sky.sky_color = {1.0f, 1.0f, 1.0f};
+    Internal::AppState::settings.sky.fog_density = 0.0f;
+    Internal::AppState::settings.camera.position = {3.8, 7.5, 20.0};
+    Internal::AppState::settings.ssao_mode = SSAOMode::CUSTOM;
+    Internal::AppState::settings.ssao_custom.sample_radius = 1.5;
+    Internal::AppState::settings.post_processing.active = true;
+    Internal::AppState::settings.post_processing.active = true;
+    Internal::AppState::settings.post_processing.active = true;
+    Internal::AppState::settings.post_processing.gamma = 1.0;
+    Internal::AppState::settings.post_processing.saturation = 1.1;
+    Internal::AppState::settings.post_processing.contrast = 1.2;
+    Internal::AppState::settings.ground.use_pbr = false;
+    Internal::AppState::settings.shadow.shadow_strength = 0.475f;
+    Internal::AppState::settings.shadow.penumbra_scale = 32.5f;
 
     bool visMarkings = false;
     on_gui_render(
@@ -486,8 +486,8 @@ int main(int argc, char** argv)
                     vmesh.set_cell_rounding(1.0);
                     vmesh.set_scale(1.0);
                     vmesh.use_base_color(false);
-                    vmesh.set_lighting_mode(volumeshOS::LightingMode::PHONG);
-                    vmesh.set_shading_mode(volumeshOS::ShadingMode::FLAT);
+                    vmesh.set_lighting_mode(LightingMode::PHONG);
+                    vmesh.set_shading_mode(ShadingMode::FLAT);
                     vmesh.set_ambient(0.65f);
                     vmesh.set_diffuse(0.3f);
                     vmesh.set_specular(0.1f);
@@ -495,10 +495,10 @@ int main(int argc, char** argv)
                     vmesh.use_two_sided_lighting(true);
                 }
 
-                volumeshOS::Internal::AppState::settings.camera.position = {3.8, 7.5, 20.0};
-                volumeshOS::Internal::AppState::settings.camera.mode = CameraMode::FLY;
-                volumeshOS::set_camera_mode(volumeshOS::CameraMode::FLY);
-                volumeshOS::set_camera_position(3.8, 7.5, 20.0);
+                Internal::AppState::settings.camera.position = {3.8, 7.5, 20.0};
+                Internal::AppState::settings.camera.mode = CameraMode::FLY;
+                set_camera_mode(CameraMode::FLY);
+                set_camera_position(3.8, 7.5, 20.0);
             }
             filenames.clear();
             if (ImGui::Button("Load Mesh"))
@@ -508,8 +508,8 @@ int main(int argc, char** argv)
                 vmesh.set_cell_rounding(1.0);
                 vmesh.set_scale(1.0);
                 vmesh.use_base_color(false);
-                vmesh.set_lighting_mode(volumeshOS::LightingMode::PHONG);
-                vmesh.set_shading_mode(volumeshOS::ShadingMode::FLAT);
+                vmesh.set_lighting_mode(LightingMode::PHONG);
+                vmesh.set_shading_mode(ShadingMode::FLAT);
                 vmesh.set_ambient(0.65f);
                 vmesh.set_diffuse(0.3f);
                 vmesh.set_specular(0.1f);
@@ -517,7 +517,7 @@ int main(int argc, char** argv)
                 vmesh.use_two_sided_lighting(true);
             }
 
-            auto mesh = volumeshOS::get_focused_mesh();
+            auto mesh = get_focused_mesh();
             if (mesh.is_valid())
             {
                 if (ImGui::Button("SERIALIZE MESH WITH ROUNDINGS"))
