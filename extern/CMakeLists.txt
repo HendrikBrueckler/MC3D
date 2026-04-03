@@ -9,7 +9,8 @@ endif()
 if(NOT EXISTS "${PROJECT_SOURCE_DIR}/extern/googletest/CMakeLists.txt"
    OR NOT EXISTS "${PROJECT_SOURCE_DIR}/extern/glog/CMakeLists.txt"
    OR NOT EXISTS "${PROJECT_SOURCE_DIR}/extern/CLI11/CMakeLists.txt"
-   OR NOT EXISTS "${PROJECT_SOURCE_DIR}/extern/TrulySeamless3D/CMakeLists.txt")
+   OR NOT EXISTS "${PROJECT_SOURCE_DIR}/extern/TrulySeamless3D/CMakeLists.txt"
+   OR (${MC3D_WITH_VIEWER} AND NOT EXISTS "${PROJECT_SOURCE_DIR}/extern/polyhydra/CMakeLists.txt"))
     if (${MC3D_STANDALONE})
         message(FATAL_ERROR "The submodules were not downloaded! Please update submodules and try again.")
     else()

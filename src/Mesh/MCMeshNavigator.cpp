@@ -1,7 +1,7 @@
 #include "MC3D/Mesh/MCMeshNavigator.hpp"
 
 #ifdef MC3D_WITH_VIEWER
-#include <util/ImGuiUtil.h>
+#include <polyhydra/util/ImGuiUtil.h>
 #include <polyhydra/polyhydra.h>
 #endif
 

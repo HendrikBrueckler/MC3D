@@ -4,8 +4,8 @@
 
 #ifdef MC3D_WITH_VIEWER
 #include <polyhydra/polyhydra.h>
-#include <settings/AppState.h>
-#include <util/ImGuiUtil.h>
+#include <polyhydra/settings/AppState.h>
+#include <polyhydra/util/ImGuiUtil.h>
 #endif
 
 namespace mc3d
