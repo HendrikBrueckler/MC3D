@@ -65,9 +65,6 @@ add_subdirectory(src)
 ### Add CLI
 if (MC3D_BUILD_CLI)
     add_subdirectory(cli)
-    if (MC3D_WITH_VIEWER)
-        add_subdirectory(viewer-demo)
-    endif()
 endif()
 
 ### Tests

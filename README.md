@@ -1,5 +1,6 @@
 ![MCvsBC](https://user-images.githubusercontent.com/38473042/152366380-3695f20e-606b-429a-b103-4c125ae17f31.png)
-
+# Viewer support for [polyhydra](https://github.com/CG-UPB/polyhydra) recently added
+We have recently integrated direct volume mesh visualization via [polyhydra](https://github.com/CG-UPB/polyhydra) into the library, enabling fast and interactive visualization of the algorithm's stages and their results.
 
 # MC3D – An algorithm for Structured Volume Decomposition
 
@@ -62,7 +63,12 @@ For full information on its usage, execute
 
     mc3d_cli --help
 
+### Data
 Example input can be found in folder ```tests/resources```.
+A dataset of 200 motorcycle complexes computed with this method on seamless parametrizations from various sources is available under [MC3D-samples](https://github.com/HendrikBrueckler/MC3D-samples).
+
+### Viewer Support
+Additionally, the CLI (and library) can be built with support for volume mesh visualization via [polyhydra](https://github.com/CG-UPB/polyhydra), by calling CMake with the additional flag ```-DMC3D_WITH_VIEWER=On```.
 
 ### API
 For details on the API of the library, check the headers in ```include```, they are thoroughly documented. Apart from that, ```cli/main.cpp``` demonstrates usage of the entire MC3D-Pipeline for both simple and advanced usage.
