@@ -58,7 +58,7 @@ In root directory
 An example command-line application is included that reads a tetrahedral mesh including a seamless parametrization from a file in .hexex-format, as used and documented in [libHexEx](https://www.graphics.rwth-aachen.de/software/libHexEx/).
 It outputs a file in the same format, containing a refined version of the input mesh, followed by the number and the list of wall triangles (three vertex indices, and a double indicating the wall triangle's distance from the brush fire's origin per line) at the end of the file.
 
-After building the CLI app can be found in ```build/Build/bin/cli``` .
+After building the CLI app can be found in ```build/Build/bin/``` .
 For full information on its usage, execute
 
     mc3d_cli --help
