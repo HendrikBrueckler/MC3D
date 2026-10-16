@@ -109,8 +109,7 @@ set_target_properties(MC3D PROPERTIES
                       DEBUG_POSTFIX "d"
                       VERSION ${${PROJECT_NAME}_VERSION_MAJOR}.${${PROJECT_NAME}_VERSION_MINOR}
                       SOVERSION ${${PROJECT_NAME}_VERSION_MAJOR}.${${PROJECT_NAME}_VERSION_MINOR}
-                      CXX_STANDARD 17
-                      CXX_STANDARD_REQUIRED ON)
+)
 # compile options
 list(APPEND MC3D_COMPILE_OPTIONS_PRV "-Wall" "-Wextra" "-Wshadow" "-Wunused" "-Wunused-function")
 target_compile_options(MC3D PRIVATE ${MC3D_COMPILE_OPTIONS_PRV})

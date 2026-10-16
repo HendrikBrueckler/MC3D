@@ -24,9 +24,11 @@ if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
 endif()
 
 ### Standalone?
-if(${CMAKE_PROJECT_NAME} STREQUAL ${PROJECT_NAME})
+if(${CMAKE_PROJECT_NAME} STREQUAL ${PROJECT_NAME}) # can use PROJECT_IS_TOP_LEVEL in cmake 3.21
     set(MC3D_STANDALONE TRUE)
     message("Configuring MC3D as standalone project...")
+    set(CMAKE_CXX_STANDARD 17)
+    set(CXX_STANDARD_REQUIRED ON)
 else()
     set(MC3D_STANDALONE FALSE)
     message("Configuring MC3D inside another cmake project...")
@@ -41,9 +43,9 @@ option(MC3D_WITH_VIEWER       "Integrate viewer for volumeMeshes" OFF)
 option(BUILD_SHARED_LIBS      "Build libraries as shared as opposed to static" ON)
 
 ### Global cmake settings
-set(CMAKE_CXX_STANDARD 17)
-set(CXX_STANDARD_REQUIRED ON)
-set(CMAKE_POSITION_INDEPENDENT_CODE ON)
+
+ # TODO: only set on MC3D target:
+set(CMAKE_POSITION_INDEPENDENT_CODE ON) 
 set(CMAKE_WINDOWS_EXPORT_ALL_SYMBOLS ON)
 set(CMAKE_C_EXTENSIONS OFF)
 set(CMAKE_CXX_EXTENSIONS OFF)
