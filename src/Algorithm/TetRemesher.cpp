@@ -41,8 +41,8 @@ TetRemesher::CollapseStats TetRemesher::collapseStats(
     VH vFrom = tetMesh.from_vertex_handle(he);
     VH vTo = tetMesh.to_vertex_handle(he);
 
-    int nTets = 0;
-    int nFs = 0;
+    [[maybe_unused]]int nTets = 0;
+    [[maybe_unused]]int nFs = 0;
     for (CH tet : tetMesh.vertex_cells(vFrom))
     {
         (void)tet;
@@ -673,7 +673,7 @@ vector<TetRemesher::FlipStats> TetRemesher::flipStats(const EH& eFlip,
     for (auto& stat : stats)
         if (stat.valid)
         {
-            int nTets = 0;
+            [[maybe_unused]]int nTets = 0;
             for (CH tet : tetMesh.halfedge_cells(heFlip))
             {
                 (void)tet;
@@ -889,7 +889,7 @@ vector<TetRemesher::FlipStats> TetRemesher::flipStats(const EH& eFlip,
 
                 int nFlippedUVW = 0;
                 Q negVolUVW = 0.0;
-                int nTotalPost = 0;
+                // int nTotalPost = 0;
 
                 // Iterate over all pre-tets
                 for (auto& kv : tet2trans)
@@ -905,7 +905,7 @@ vector<TetRemesher::FlipStats> TetRemesher::flipStats(const EH& eFlip,
                         auto vs = meshProps().get_halfface_vertices(hf);
                         if (vs[0] != stat.vTarget && vs[1] != stat.vTarget && vs[2] != stat.vTarget)
                         {
-                            nTotalPost++;
+                            // nTotalPost++;
                             array<Vec3Q, 4> UVWs = {chart.at(vs[0]), chart.at(vs[1]), chart.at(vs[2]), uvwLocal};
                             array<Vec3d, 4> UVWsd
                                 = {Vec3Q2d(UVWs[0]), Vec3Q2d(UVWs[1]), Vec3Q2d(UVWs[2]), Vec3Q2d(uvwLocal)};
@@ -1176,7 +1176,7 @@ void TetRemesher::remeshToImproveAngles(
     }
 
     int nFlip = 0, nCollapse = 0, nSplit = 0, nShift = 0;
-    int nCollapseInLastBatch = 0, nSplitInLastBatch = 0;
+    // int nCollapseInLastBatch = 0, nSplitInLastBatch = 0;
 
     bool permanentlyBlockSplits = false;
     // TODO this is a dirty fix, find the actual (numerical) cause for cycles
@@ -1226,7 +1226,7 @@ void TetRemesher::remeshToImproveAngles(
             he2newestTimeStamp[operation.heCollapse]++;
             e2newestTimeStamp[tetMesh.edge_handle(operation.heCollapse)]++;
             nCollapse++;
-            nCollapseInLastBatch++;
+            // nCollapseInLastBatch++;
 
             set<CH> tets;
             for (CH tet : tetMesh.vertex_cells(tetMesh.from_vertex_handle(operation.heCollapse)))
@@ -1244,7 +1244,7 @@ void TetRemesher::remeshToImproveAngles(
             if (tetMesh.is_deleted(operation.eSplit))
                 continue;
 
-            nSplitInLastBatch++;
+            // nSplitInLastBatch++;
             nSplit++;
             e2newestTimeStamp[operation.eSplit]++;
             for (HEH he : tetMesh.edge_halfedges(operation.eSplit))

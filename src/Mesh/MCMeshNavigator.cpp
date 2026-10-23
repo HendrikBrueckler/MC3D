@@ -705,7 +705,7 @@ void MCMeshNavigator::getCriticalEntities(vector<bool>& isCriticalNode,
             nsStart.insert(n);
 
     int nNodes = 0;
-    auto addNode = [&, this](const VH& n)
+    auto addNode = [&](const VH& n)
     {
         CriticalEntity node;
         node.id = criticalEntities.size();

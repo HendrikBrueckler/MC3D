@@ -473,8 +473,8 @@ MCBuilder::RetCode MCBuilder::createAndMapArcs()
 
                 if (meshProps().isAllocated<IS_FEATURE_E>() && mcMeshProps.isAllocated<IS_FEATURE_E>())
                 {
-                    int nFeatureArcs = 0;
-                    int nNonFeatureArcs = 0;
+                    [[maybe_unused]]int nFeatureArcs = 0;
+                    [[maybe_unused]]int nNonFeatureArcs = 0;
                     for (HEH he : chain)
                         if (meshProps().get<IS_FEATURE_E>(tetMesh.edge_handle(he)))
                             nFeatureArcs++;
@@ -591,8 +591,8 @@ MCBuilder::RetCode MCBuilder::createAndMapPatches()
 
             if (meshProps().isAllocated<IS_FEATURE_F>() && mcMeshProps.isAllocated<IS_FEATURE_F>())
             {
-                int nFeatureFaces = 0;
-                int nNonFeatureFaces = 0;
+                [[maybe_unused]] int nFeatureFaces = 0;
+                [[maybe_unused]] int nNonFeatureFaces = 0;
                 for (HFH hf : hfsP)
                     if (meshProps().get<IS_FEATURE_F>(tetMesh.face_handle(hf)))
                         nFeatureFaces++;
