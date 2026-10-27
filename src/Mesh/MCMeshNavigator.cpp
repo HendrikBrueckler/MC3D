@@ -1360,7 +1360,7 @@ void MCMeshNavigator::assertValidMC(bool minimality, bool exhaustive) const
                                    [&, this](const CH& b)
                                    {
                                        return containsMatching(mcMeshProps().ref<BLOCK_EDGE_ARCS>(b),
-                                                               [&, this](const pair<const UVWDir, set<EH>>& kv)
+                                                               [&](const pair<const UVWDir, set<EH>>& kv)
                                                                { return kv.second.count(arc) != 0; });
                                    });
             if (!isBlockEdge)

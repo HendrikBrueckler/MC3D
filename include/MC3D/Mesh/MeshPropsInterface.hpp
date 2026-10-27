@@ -1,6 +1,8 @@
 #ifndef MC3D_MESHWITHPROPSINTERFACE_HPP
 #define MC3D_MESHWITHPROPSINTERFACE_HPP
 
+#include <cassert>
+
 /**
  * @brief Use this to declare a mesh-associated property to be used via \ref mc3d::MeshPropsInterface.
  *        Use this when you want an array-based property, that will allocate space for each entity and its value
@@ -19,12 +21,13 @@
         using entity_t = OVM::Entity::OVM_ENTITY_T;                                                                    \
         using value_t = VALUE_T;                                                                                       \
         using handle_t = OVM::HandleT<entity_t>;                                                                       \
-        using prop_t = OVM::PropertyPtr<value_t, entity_t>;                                                             \
-        using ref_t = vector<value_t>::reference;                                                                      \
-        using const_ref_t = vector<value_t>::const_reference;                                                          \
+        using prop_t = OVM::PropertyPtr<value_t, entity_t>;                                                            \
+        using ref_t = std::vector<value_t>::reference;                                                                 \
+        using const_ref_t = std::vector<value_t>::const_reference;                                                     \
         const static bool IS_MAPPED = false;                                                                           \
         std::unique_ptr<prop_t> ptr;                                                                                   \
         value_t def = value_t();                                                                                       \
+        std::string wrapped = "";                                                                                      \
         inline static std::string name()                                                                               \
         {                                                                                                              \
             return "MC3D_" #NAME;                                                                                      \
@@ -56,6 +59,7 @@
         const static bool IS_MAPPED = true;                                                                            \
         std::unique_ptr<prop_t> ptr;                                                                                   \
         value_t def = value_t();                                                                                       \
+        std::string wrapped = "";                                                                                      \
         inline static std::string name()                                                                               \
         {                                                                                                              \
             return "MC3D_MAPPED_" #NAME;                                                                               \
@@ -234,7 +238,6 @@ class MeshPropsInterface
     static_assert(no_dupe<Props...>::value, "PROPERTIES NEED TO BE UNIQUE, BUT YOU PASSED DUPLICATES");
 
   public:
-
     /**
      * @brief Create a wrapper around \p mesh_ that manages properties of its mesh elements.
      *
@@ -300,6 +303,29 @@ class MeshPropsInterface
     }
 
     /**
+     * @brief Wrap a property \p prop in this manager.
+     *        A property MUST be allocated before it can be used.
+     *        A property MUST be released before being allocated again.
+     *
+     * @tparam Prop property to allocate
+     * @return Prop::prop_t& a reference to the allocated property object (map or OVM-prop-handle)
+     */
+    template <typename Prop, typename std::enable_if<!Prop::IS_MAPPED, int>::type = 0>
+    typename Prop::prop_t& wrap(const std::string& name)
+    {
+        if (isAllocated<Prop>())
+        {
+            DLOG(WARNING) << "Tried to wrap an already allocated property, releasing the old property";
+            release<Prop>();
+        }
+        assert(!name.empty());
+        std::get<Index<Prop, Props...>::value>(_props).wrapped = name;
+        return allocateProp<Prop>(std::get<Index<Prop, Props...>::value>(_props).ptr,
+                                  std::get<Index<Prop, Props...>::value>(_props).def,
+                                  name);
+    }
+
+    /**
      * @brief Allocate a certain type of property \p prop in this manager with a default value of \p def.
      *        A property MUST be allocated before it can be used.
      *        A property MUST be released before being allocated again.
@@ -351,8 +377,15 @@ class MeshPropsInterface
         if (!isAllocated<Prop>())
             LOG(WARNING) << "Tried to release a non-allocated property";
         else
-            clearProp<Prop>(std::get<Index<Prop, Props...>::value>(_props).ptr,
-                            std::get<Index<Prop, Props...>::value>(_props).def);
+        {
+            if constexpr (Prop::IS_MAPPED)
+                clearProp<Prop>(std::get<Index<Prop, Props...>::value>(_props).ptr,
+                                std::get<Index<Prop, Props...>::value>(_props).def);
+            else
+                clearProp<Prop>(std::get<Index<Prop, Props...>::value>(_props).ptr,
+                                std::get<Index<Prop, Props...>::value>(_props).def,
+                                std::get<Index<Prop, Props...>::value>(_props).wrapped);
+        }
     }
 
     /**
@@ -761,14 +794,17 @@ class MeshPropsInterface
     }
 
     template <typename Prop, typename std::enable_if<!Prop::IS_MAPPED, int>::type = 0>
-    typename Prop::prop_t& allocateProp(std::unique_ptr<typename Prop::prop_t>& ptr, const typename Prop::value_t& def)
+    typename Prop::prop_t& allocateProp(std::unique_ptr<typename Prop::prop_t>& ptr,
+                                        const typename Prop::value_t& def,
+                                        const std::string& name = "")
     {
         static_assert(is_any_of<Prop, Props...>::value, "NO SUCH PROPERTY MANAGED BY THIS CLASS");
         assert(!propIsAllocated<Prop>(ptr));
         ptr = std::unique_ptr<typename Prop::prop_t>(
             new typename Prop::prop_t(mesh().template request_property<typename Prop::value_t, typename Prop::entity_t>(
-                Prop::name() + std::to_string(id), def)));
-        mesh().set_persistent(*ptr);
+                name.empty() ? Prop::name() + std::to_string(id) : name, def)));
+        if (name.empty())
+            mesh().set_persistent(*ptr);
         return *ptr;
     }
 
@@ -790,13 +826,18 @@ class MeshPropsInterface
     }
 
     template <typename Prop, typename std::enable_if<!Prop::IS_MAPPED, int>::type = 0>
-    void clearProp(std::unique_ptr<typename Prop::prop_t>& ptr, const typename Prop::value_t& def)
+    void clearProp(std::unique_ptr<typename Prop::prop_t>& ptr, const typename Prop::value_t& def, std::string& name)
     {
         static_assert(is_any_of<Prop, Props...>::value, "NO SUCH PROPERTY MANAGED BY THIS CLASS");
         assert(propIsAllocated<Prop>(ptr));
-        mesh().set_persistent(*ptr, false);
-        for (auto it = ptr->begin(); it != ptr->end(); it++)
-            *it = def;
+        if (name.empty())
+        {
+            mesh().set_persistent(*ptr, false);
+            for (auto it = ptr->begin(); it != ptr->end(); it++)
+                *it = def;
+        }
+        else
+            name.clear();
         ptr.reset();
     }
 
